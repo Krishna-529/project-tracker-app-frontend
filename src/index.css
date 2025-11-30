@@ -1,0 +1,252 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* ===== LIGHT MODE: "Linear + Notion Inspired" ===== */
+    
+    /* Base surfaces - Background (#F7F9FC) */
+    --background: 210 50% 98%;
+    --foreground: 217 33% 17%; /* Text Main (#1F2937) */
+    
+    /* Card/Surface - Sidebar BG (#EFF2F7) */
+    --card: 216 33% 97%;
+    --card-foreground: 217 33% 17%;
+    
+    /* Popover */
+    --popover: 210 50% 98%;
+    --popover-foreground: 217 33% 17%;
+    
+    /* Primary - Muted Deep Blue (#3A5A98) */
+    --primary: 213 47% 42%;
+    --primary-foreground: 0 0% 100%;
+    
+    /* Secondary surfaces - Primary Light (#DCE6F4) */
+    --secondary: 213 56% 88%;
+    --secondary-foreground: 217 33% 17%;
+    
+    /* Muted text and surfaces */
+    --muted: 216 33% 97%;
+    --muted-foreground: 217 20% 45%;
+    
+    /* Accent - Gentle Highlight (#6AA1D8) */
+    --accent: 207 57% 63%;
+    --accent-foreground: 0 0% 100%;
+    
+    /* Success - Emerald (#10b981) */
+    --success: 160 84% 39%;
+    --success-foreground: 0 0% 100%;
+    
+    /* Warning - Amber (#f59e0b) */
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    
+    /* Destructive */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    
+    /* Borders/Lines (#E2E8F0) */
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 213 47% 42%; /* Primary */
+    
+    /* Radius */
+    --radius: 0.5rem;
+    
+    /* Tree guide lines */
+    --guide-line: 214 32% 91%;
+    
+    /* Hover states */
+    --hover-surface: 213 56% 92%;
+    
+    /* Active/Focus glow */
+    --glow: 213 47% 42%;
+
+    /* Tag badge - Primary Light tint */
+    --tag-bg: 213 56% 88%;
+    --tag-fg: 213 47% 42%;
+
+    /* Notebook-style explorer tokens */
+    --separator: 214 32% 91%;
+    --hover-bg: 213 56% 92%;
+    --selected-border: 213 47% 42%;
+    --text-secondary: 217 20% 45%;
+
+    /* Sidebar palette */
+    --sidebar-background: 216 33% 97%;
+    --sidebar-foreground: 217 33% 17%;
+    --sidebar-primary: 213 47% 42%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 213 56% 88%;
+    --sidebar-accent-foreground: 217 33% 17%;
+    --sidebar-border: 214 32% 91%;
+    --sidebar-ring: 213 47% 42%;
+
+    /* Motion tokens */
+    --transition-fast: 80ms;
+    --transition-base: 120ms;
+    --transition-smooth: 150ms;
+  }
+
+  .dark {
+    /* ===== DARK MODE: "Deep Focus Theme" ===== */
+    
+    /* Base surfaces - Void Grey (#09090b) */
+    --background: 240 10% 4%;
+    --foreground: 210 20% 96%; /* Mist White (#f4f4f5) */
+    
+    /* Card/Surface - Surface Grey (#18181b) */
+    --card: 240 6% 10%;
+    --card-foreground: 210 20% 96%;
+    
+    /* Popover */
+    --popover: 240 6% 10%;
+    --popover-foreground: 210 20% 96%;
+    
+    /* Primary Accent - Electric Indigo (#6366f1) */
+    --primary: 239 84% 67%;
+    --primary-foreground: 0 0% 100%;
+    
+    /* Secondary surfaces - Ghost Grey (#27272a) */
+    --secondary: 240 4% 16%;
+    --secondary-foreground: 210 20% 96%;
+    
+    /* Muted text and surfaces */
+    --muted: 240 4% 16%;
+    --muted-foreground: 215 14% 67%; /* Metal Grey (#a1a1aa) */
+    
+    /* Accent states */
+    --accent: 239 84% 67%;
+    --accent-foreground: 0 0% 100%;
+    
+    /* Success - Emerald (#10b981) */
+    --success: 160 84% 39%;
+    --success-foreground: 0 0% 100%;
+    
+    /* Warning - Amber (#f59e0b) */
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    
+    /* Destructive */
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 20% 96%;
+    
+    /* Borders - Edge Grey (#27272a) */
+    --border: 240 4% 16%;
+    --input: 240 4% 16%;
+    --ring: 239 84% 67%;
+    
+    /* Tree guide lines */
+    --guide-line: 240 4% 16%;
+    
+    /* Hover states - Ghost Grey with 50% opacity */
+    --hover-surface: 240 4% 16%;
+    
+    /* Active/Focus glow */
+    --glow: 239 84% 67%;
+
+    /* Tag badge - Dark Indigo (#312e81) */
+    --tag-bg: 239 67% 19%;
+    --tag-fg: 239 84% 67%;
+
+    /* Notebook-style explorer tokens */
+    --separator: 240 4% 16%;
+    --hover-bg: 240 5% 12%;
+    --selected-border: 239 84% 67%;
+    --text-secondary: 215 14% 67%;
+
+    /* Sidebar palette */
+    --sidebar-background: 240 6% 10%;
+    --sidebar-foreground: 210 20% 96%;
+    --sidebar-primary: 239 84% 67%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 4% 16%;
+    --sidebar-accent-foreground: 210 20% 96%;
+    --sidebar-border: 240 4% 16%;
+    --sidebar-ring: 239 84% 67%;
+
+    /* Motion tokens */
+    --transition-fast: 80ms;
+    --transition-base: 120ms;
+    --transition-smooth: 150ms;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  .transition-notebook {
+    transition: all var(--transition-base) ease-out;
+  }
+
+  .transition-fast {
+    transition: all var(--transition-fast) ease-in;
+  }
+
+  .scale-editing {
+    transform: scale(1.02);
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+  }
+}
+
+@layer utilities {
+  /* Tree guide lines */
+  .tree-guide-line {
+    @apply border-l border-border/40;
+  }
+  
+  /* Hover surface */
+  .hover-surface {
+    @apply hover:bg-hover-surface transition-colors duration-150;
+  }
+  
+  /* Active glow effect */
+  .active-glow {
+    box-shadow: 0 0 0 2px hsl(var(--glow) / 0.15);
+  }
+  
+  /* Smooth scale micro-interaction */
+  .scale-press {
+    @apply active:scale-[0.97] transition-transform duration-100;
+  }
+
+  /* Button hover lift */
+  .btn-lift {
+    @apply hover:shadow-md hover:-translate-y-0.5 transition-all duration-200;
+  }
+
+  /* Focus visible ring */
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+  }
+}
