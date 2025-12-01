@@ -13,6 +13,7 @@ export interface ApiNode {
   status: NodeStatus;
   path: string;
   sortOrder: number;
+  deadline?: string | null;
 }
 
 interface TreeResponse {
@@ -77,6 +78,7 @@ interface CreateNodeRequest {
   isTask: boolean;
   parentId?: number | null;
   status?: NodeStatus;
+  deadline?: string | null;
 }
 
 export const createNode = async (payload: CreateNodeRequest) => {
@@ -98,6 +100,7 @@ interface UpdateNodeRequest {
   status?: NodeStatus;
   notes?: string;
   metaDescription?: string | null;
+  deadline?: string | null;
 }
 
 export const updateNode = async (id: number, payload: UpdateNodeRequest) => {

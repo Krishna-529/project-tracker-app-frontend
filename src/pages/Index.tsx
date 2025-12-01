@@ -153,6 +153,23 @@ const Index = () => {
     [refreshTree],
   );
 
+  const handleSetDeadline = useCallback(
+    async (nodeId: number, deadline: string | null) => {
+      try {
+        await updateNode(nodeId, { deadline });
+        toast.success(deadline ? 'Deadline updated' : 'Deadline cleared');
+      } catch (err) {
+        toast.error('Failed to update deadline', {
+          description: err instanceof Error ? err.message : undefined,
+        });
+        return;
+      } finally {
+        void refreshTree();
+      }
+    },
+    [refreshTree],
+  );
+
   const handleReorder = useCallback(
     async (parentId: number | null, orderedIds: number[]) => {
       try {
@@ -427,6 +444,7 @@ const Index = () => {
               onCloseProject={handleCloseProject}
               onReorder={handleReorder}
               onMove={handleMove}
+              onSetDeadline={handleSetDeadline}
               onSelectAll={openedProjectId != null ? handleCloseProject : handleResetScope}
               isAllSelected={activeProjectId == null && openedProjectId == null}
               openedProjectName={openedProjectName}

@@ -8,7 +8,7 @@ export interface Node {
   path: string;
   status: NodeStatus;
   meta_description?: string;
-  deadline?: string;
+  deadline?: string | null;
   notes?: string;
   parts_completed?: number;
   sort_order: number;
@@ -21,7 +21,7 @@ export interface CreateNodeInput {
   parent_id: number | null;
   status?: NodeStatus;
   meta_description?: string;
-  deadline?: string;
+  deadline?: string | null;
   notes?: string;
 }
 
@@ -30,7 +30,7 @@ export interface UpdateNodeInput {
   name?: string;
   status?: NodeStatus;
   meta_description?: string;
-  deadline?: string;
+  deadline?: string | null;
   notes?: string;
   parts_completed?: number;
 }

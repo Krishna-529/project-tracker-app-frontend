@@ -33,6 +33,7 @@ export const buildNodeTree = (flatNodes: ApiNode[]): BuildResult => {
       parent_id: raw.parentId,
       path: raw.path,
       status: raw.status,
+      deadline: raw.deadline ?? null,
       sort_order: raw.sortOrder ?? 0,
       children: raw.isTask ? undefined : [],
     };

@@ -12,9 +12,10 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Archive, ArchiveRestore, ChevronRight, ChevronsDownUp, ChevronsUpDown, Folder, FolderOpen, MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, Calendar as CalendarIcon, ChevronRight, ChevronsDownUp, ChevronsUpDown, Folder, FolderOpen, MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { format } from 'date-fns';
 
 import { cn } from '@/lib/utils';
 import type { Node } from '@/types/node';
@@ -29,6 +30,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Calendar } from '@/components/ui/calendar';
 
 interface SidebarTreeProps {
   nodes: Node[];
@@ -44,6 +56,7 @@ interface SidebarTreeProps {
   onCloseProject?: () => void;
   onReorder?: (parentId: number | null, orderedIds: number[]) => void | Promise<unknown>;
   onMove?: (nodeId: number, newParentId: number | null) => void | Promise<unknown>;
+  onSetDeadline?: (nodeId: number, deadline: string | null) => void | Promise<unknown>;
   onSelectAll?: () => void;
   isAllSelected?: boolean;
   openedProjectName?: string | null;
@@ -63,6 +76,7 @@ export function SidebarTree({
   onCloseProject,
   onReorder,
   onMove,
+  onSetDeadline,
   onSelectAll,
   isAllSelected,
   openedProjectName,
@@ -469,6 +483,7 @@ export function SidebarTree({
                   onToggleExpand={() => toggleNodeExpansion(node.id)}
                   expandedNodes={expandedNodes}
                   toggleNodeExpansion={toggleNodeExpansion}
+                  onSetDeadline={onSetDeadline}
                 />
               ))}
             </SortableContext>
@@ -560,9 +575,10 @@ interface TreeNodeProps {
   onToggleExpand: () => void;
   expandedNodes: Set<number>;
   toggleNodeExpansion: (nodeId: number) => void;
+  onSetDeadline?: (nodeId: number, deadline: string | null) => void | Promise<unknown>;
 }
 
-function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTask, onRename, onArchive, onDelete, level, isShiftPressed, hoveredNodeId, activeDragId, overNodeId, isDraggingAncestor, isExpanded, onToggleExpand, expandedNodes, toggleNodeExpansion }: TreeNodeProps) {
+function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTask, onRename, onArchive, onDelete, level, isShiftPressed, hoveredNodeId, activeDragId, overNodeId, isDraggingAncestor, isExpanded, onToggleExpand, expandedNodes, toggleNodeExpansion, onSetDeadline }: TreeNodeProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [editName, setEditName] = useState(node.name);
@@ -571,6 +587,8 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
   const [addName, setAddName] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isArchivedExpanded, setIsArchivedExpanded] = useState(true);
+  const [showDeadlineDialog, setShowDeadlineDialog] = useState(false);
+  const [pendingDeadline, setPendingDeadline] = useState<Date | undefined>(undefined);
   const inputRef = useRef<HTMLInputElement>(null);
   const addInputRef = useRef<HTMLInputElement>(null);
   const childNodes = node.children ?? [];
@@ -595,6 +613,18 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
       archivedChildNodes: archived,
     };
   }, [childNodes]);
+
+  const deadlineLabel = useMemo(() => {
+    if (!node.deadline) {
+      return null;
+    }
+    try {
+      return format(new Date(node.deadline), 'MMM d, yyyy');
+    } catch (error) {
+      console.error('[TreeNode] Failed to format deadline', error);
+      return null;
+    }
+  }, [node.deadline]);
 
   const {
     attributes,
@@ -631,6 +661,12 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
       setShowAddInput(false);
     }
   }, [isArchived, showAddInput]);
+
+  useEffect(() => {
+    if (showDeadlineDialog) {
+      setPendingDeadline(node.deadline ? new Date(node.deadline) : undefined);
+    }
+  }, [showDeadlineDialog, node.deadline]);
 
   const handleRename = () => {
     if (editName.trim() && editName !== node.name && onRename) {
@@ -682,6 +718,44 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
     setShowAddInput(true);
     if (!isExpanded) {
       onToggleExpand();
+    }
+  };
+
+  const toIsoDate = (date: Date | undefined) => {
+    if (!date) {
+      return null;
+    }
+    const adjusted = new Date(date);
+    adjusted.setHours(12, 0, 0, 0);
+    return adjusted.toISOString();
+  };
+
+  const commitDeadline = async (value: string | null) => {
+    if (!onSetDeadline) {
+      return;
+    }
+    await onSetDeadline(node.id, value);
+  };
+
+  const handleDeadlineSave = async () => {
+    if (!pendingDeadline) {
+      return;
+    }
+    try {
+      await commitDeadline(toIsoDate(pendingDeadline));
+      setShowDeadlineDialog(false);
+    } catch (error) {
+      console.error('[TreeNode] Failed to save deadline', error);
+    }
+  };
+
+  const handleDeadlineClear = async () => {
+    try {
+      await commitDeadline(null);
+      setPendingDeadline(undefined);
+      setShowDeadlineDialog(false);
+    } catch (error) {
+      console.error('[TreeNode] Failed to clear deadline', error);
     }
   };
 
@@ -763,6 +837,24 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
             </>
           )}
         </>
+      ),
+    });
+  }
+
+  if (!node.is_task && !isArchived && onSetDeadline) {
+    menuSections.push({
+      key: 'deadline',
+      content: (
+        <button
+          className="w-full px-3 py-1.5 text-xs text-left text-foreground hover:bg-secondary hover:text-primary transition-all font-medium flex items-center gap-2"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowDeadlineDialog(true);
+          }}
+        >
+          <CalendarIcon className="w-3 h-3" />
+          {node.deadline ? 'Change Deadline' : 'Set Deadline'}
+        </button>
       ),
     });
   }
@@ -851,21 +943,21 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
 
         <div
           {...listeners}
-        className={cn(
-          'group flex items-center gap-2 py-2 px-2 rounded-lg cursor-pointer transition-all select-none',
-          'hover:bg-secondary/50',
-          isSelected
-            ? 'bg-secondary border-l-3 border-accent font-medium shadow-sm'
-            : 'border-l-3 border-transparent hover-border-accent/30',
-          isDragging && 'cursor-grabbing',
-          isShiftDropTarget && 'ring-2 ring-primary',
-          isArchived && !isSelected && 'opacity-70',
-        )}
-        style={rowStyle}
-        onClick={handleClick}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      >
+          className={cn(
+            'group flex items-center gap-2 py-2 px-2 rounded-lg cursor-pointer transition-all select-none',
+            'hover:bg-secondary/50',
+            isSelected
+              ? 'bg-secondary border-l-3 border-accent font-medium shadow-sm'
+              : 'border-l-3 border-transparent hover-border-accent/30',
+            isDragging && 'cursor-grabbing',
+            isShiftDropTarget && 'ring-2 ring-primary',
+            isArchived && !isSelected && 'opacity-70',
+          )}
+          style={rowStyle}
+          onClick={handleClick}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
         {canExpand ? (
           <div
             className={cn(
@@ -909,6 +1001,12 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
               </span>
             )}
           </div>
+        )}
+
+        {!node.is_task && deadlineLabel && (
+          <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+            {deadlineLabel}
+          </span>
         )}
 
         {isHovered && !isRenaming && (
@@ -972,6 +1070,42 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
         </AlertDialogContent>
       </AlertDialog>
 
+      <Dialog open={showDeadlineDialog} onOpenChange={setShowDeadlineDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{node.deadline ? 'Change project deadline' : 'Set project deadline'}</DialogTitle>
+            <DialogDescription>
+              Pick a date to track this project's deadline. Leave blank to keep it unset.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <Calendar
+              mode="single"
+              selected={pendingDeadline}
+              onSelect={(date) => setPendingDeadline(date ?? undefined)}
+              initialFocus
+            />
+          </div>
+          <DialogFooter className="sm:justify-between">
+            <Button
+              variant="ghost"
+              onClick={() => { void handleDeadlineClear(); }}
+              disabled={!node.deadline && !pendingDeadline}
+            >
+              Clear deadline
+            </Button>
+            <div className="flex gap-2">
+              <DialogClose asChild>
+                <Button variant="secondary">Cancel</Button>
+              </DialogClose>
+              <Button onClick={() => { void handleDeadlineSave(); }} disabled={!pendingDeadline}>
+                Save
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {!node.is_task && isExpanded && (
         <>
           {archivedChildNodes.length > 0 && (
@@ -1028,6 +1162,7 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
                       onToggleExpand={() => toggleNodeExpansion(child.id)}
                       expandedNodes={expandedNodes}
                       toggleNodeExpansion={toggleNodeExpansion}
+                      onSetDeadline={onSetDeadline}
                     />
                   ))}
                 </SortableContext>
@@ -1059,6 +1194,7 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
                 onToggleExpand={() => toggleNodeExpansion(child.id)}
                 expandedNodes={expandedNodes}
                 toggleNodeExpansion={toggleNodeExpansion}
+                onSetDeadline={onSetDeadline}
               />
             ))
           ) : (
@@ -1085,6 +1221,7 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
                   onToggleExpand={() => toggleNodeExpansion(child.id)}
                   expandedNodes={expandedNodes}
                   toggleNodeExpansion={toggleNodeExpansion}
+                  onSetDeadline={onSetDeadline}
                 />
               ))}
             </SortableContext>
