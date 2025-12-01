@@ -120,6 +120,7 @@ interface MoveNodeRequest {
 }
 
 export const moveNode = async (payload: MoveNodeRequest) => {
+  console.log('[API] moveNode called with:', payload);
   const response = await fetch(`${API_BASE_URL}/nodes/move`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -127,7 +128,9 @@ export const moveNode = async (payload: MoveNodeRequest) => {
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to move node: ${response.statusText}`);
+    const errorData = await response.json().catch(() => ({}));
+    console.error('[API] moveNode failed:', response.status, errorData);
+    throw new Error(`Failed to move node: ${response.statusText} - ${JSON.stringify(errorData)}`);
   }
 
   return response.json();
@@ -147,6 +150,18 @@ export const reorderNodes = async (payload: ReorderNodesRequest) => {
 
   if (!response.ok) {
     throw new Error(`Failed to reorder nodes: ${response.statusText}`);
+  }
+
+  return response.json();
+};
+
+export const deleteNode = async (nodeId: number) => {
+  const response = await fetch(`${API_BASE_URL}/nodes/${nodeId}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to delete node ${nodeId}: ${response.statusText}`);
   }
 
   return response.json();

@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { TreeContainer } from '@/components/ProjectTree/TreeContainer';
 import { SidebarTree } from '@/components/SidebarTree';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { fetchNodeTree, createNode, updateNode, reorderNodes as reorderNodesApi, moveNode as moveNodeApi } from '@/lib/api';
+import { fetchNodeTree, createNode, updateNode, reorderNodes as reorderNodesApi, moveNode as moveNodeApi, deleteNode } from '@/lib/api';
 import { buildNodeTree } from '@/lib/nodeTree';
 import { cn } from '@/lib/utils';
 import type { Node } from '@/types/node';
@@ -187,6 +187,69 @@ const Index = () => {
     [refreshTree],
   );
 
+  const handleDelete = useCallback(
+    async (nodeId: number) => {
+      try {
+        await deleteNode(nodeId);
+        toast.success('Deleted successfully');
+        
+        // Clear selection if the deleted node was selected
+        if (selection?.id === nodeId) {
+          setSelection(null);
+        }
+        
+        // Clear active project if it was the deleted node or descendant
+        if (activeProjectId === nodeId) {
+          setActiveProjectId(null);
+        }
+        
+        // Clear opened project if it was the deleted node
+        if (openedProjectId === nodeId) {
+          setOpenedProjectId(null);
+        }
+      } catch (err) {
+        toast.error('Failed to delete', {
+          description: err instanceof Error ? err.message : undefined,
+        });
+        throw err;
+      } finally {
+        void refreshTree();
+      }
+    },
+    [refreshTree, selection, activeProjectId, openedProjectId],
+  );
+
+  const handleArchive = useCallback(
+    async (nodeId: number, archive: boolean) => {
+      try {
+        await updateNode(nodeId, { status: archive ? 'archived' : 'todo' });
+        toast.success(archive ? 'Archived successfully' : 'Restored successfully');
+
+        if (archive) {
+          if (selection?.id === nodeId) {
+            setSelection(null);
+          }
+
+          if (activeProjectId === nodeId) {
+            setActiveProjectId(null);
+          }
+
+          if (openedProjectId === nodeId) {
+            setOpenedProjectId(null);
+          }
+        }
+      } catch (err) {
+        toast.error(archive ? 'Failed to archive' : 'Failed to restore', {
+          description: err instanceof Error ? err.message : undefined,
+        });
+        throw err;
+      } finally {
+        void refreshTree();
+      }
+    },
+    [refreshTree, selection, activeProjectId, openedProjectId],
+  );
+
   const handleOpenProject = useCallback((nodeId: number) => {
     const node = nodeMap.get(nodeId);
     if (node && !node.is_task) {
@@ -358,6 +421,8 @@ const Index = () => {
               onAddProject={handleAddProject}
               onAddTask={handleAddTask}
               onRename={handleRename}
+              onArchive={handleArchive}
+              onDelete={handleDelete}
               onOpenProject={handleOpenProject}
               onCloseProject={handleCloseProject}
               onReorder={handleReorder}

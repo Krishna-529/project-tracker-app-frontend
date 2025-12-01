@@ -12,13 +12,23 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ChevronRight, Folder, FolderOpen, MoreVertical, Pencil, Plus } from 'lucide-react';
-import type { CSSProperties } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Archive, ArchiveRestore, ChevronRight, ChevronsDownUp, ChevronsUpDown, Folder, FolderOpen, MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react';
+import type { CSSProperties, ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { cn } from '@/lib/utils';
 import type { Node } from '@/types/node';
 import { ProjectPickerModal } from './ProjectPickerModal';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface SidebarTreeProps {
   nodes: Node[];
@@ -28,6 +38,8 @@ interface SidebarTreeProps {
   onAddProject: (parentId?: number, name?: string) => void;
   onAddTask: (projectId: number, name?: string) => void;
   onRename?: (nodeId: number, newName: string) => void;
+  onArchive?: (nodeId: number, archive: boolean) => void | Promise<unknown>;
+  onDelete?: (nodeId: number) => void | Promise<unknown>;
   onOpenProject?: (nodeId: number) => void;
   onCloseProject?: () => void;
   onReorder?: (parentId: number | null, orderedIds: number[]) => void | Promise<unknown>;
@@ -45,6 +57,8 @@ export function SidebarTree({
   onAddProject,
   onAddTask,
   onRename,
+  onArchive,
+  onDelete,
   onOpenProject,
   onCloseProject,
   onReorder,
@@ -59,6 +73,10 @@ export function SidebarTree({
   const bottomInputRef = useRef<HTMLInputElement>(null);
   const [treeData, setTreeData] = useState<Node[]>(nodes);
   const [activeDragId, setActiveDragId] = useState<number | null>(null);
+  const [isShiftPressed, setIsShiftPressed] = useState(false);
+  const [hoveredNodeId, setHoveredNodeId] = useState<number | null>(null);
+  const [overNodeId, setOverNodeId] = useState<number | null>(null);
+  const [expandedNodes, setExpandedNodes] = useState<Set<number>>(new Set());
   const latestNodesRef = useRef(nodes);
   const isSyncingRef = useRef(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -77,13 +95,17 @@ export function SidebarTree({
   };
 
   useEffect(() => {
+    console.log('[SidebarTree] nodes prop changed, isSyncingRef:', isSyncingRef.current);
+    console.log('[SidebarTree] New nodes structure:', JSON.stringify(nodes.map(n => ({ id: n.id, name: n.name, children: n.children?.map(c => ({ id: c.id, name: c.name })) })), null, 2));
+    
     latestNodesRef.current = nodes;
     if (!isSyncingRef.current) {
+      console.log('[SidebarTree] Updating treeData with new nodes');
       setTreeData(nodes);
+    } else {
+      console.log('[SidebarTree] Skipping treeData update because syncing');
     }
   }, [nodes]);
-
-  // Cleanup debounce on unmount
   useEffect(() => {
     return () => {
       if (debounceTimerRef.current) {
@@ -97,6 +119,12 @@ export function SidebarTree({
       bottomInputRef.current.focus();
     }
   }, [showBottomAddInput]);
+
+  useEffect(() => {
+    if (activeDragId) {
+      console.log('[State] isShiftPressed changed to:', isShiftPressed);
+    }
+  }, [isShiftPressed, activeDragId]);
 
   const handleCreateBottomProject = () => {
     const trimmedName = bottomProjectName.trim();
@@ -138,12 +166,65 @@ export function SidebarTree({
     return rectIntersection(args);
   }, []);
 
+  const handleDragOver = useCallback((event: any) => {
+    if (event.over) {
+      setHoveredNodeId(Number(event.over.id));
+      setOverNodeId(Number(event.over.id));
+    } else {
+      setHoveredNodeId(null);
+      setOverNodeId(null);
+    }
+  }, []);
+
   const handleDragStart = (event: DragStartEvent) => {
     setActiveDragId(Number(event.active.id));
+    console.log('[DragStart] Started dragging node:', event.active.id);
+    
+    // Check initial Shift state
+    const initialShiftState = event.active.data.current?.event?.shiftKey || false;
+    if (initialShiftState) {
+      setIsShiftPressed(true);
+      console.log('[DragStart] Shift initially pressed');
+    }
+    
+    // Track Shift key state
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        console.log('[Shift] Key pressed down');
+        setIsShiftPressed(true);
+      }
+    };
+    
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        console.log('[Shift] Key released');
+        setIsShiftPressed(false);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    
+    // Cleanup on drag end
+    const cleanup = () => {
+      console.log('[DragStart] Cleaning up event listeners');
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('mouseup', cleanup);
+    };
+    
+    window.addEventListener('mouseup', cleanup, { once: true });
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
+    const wasShiftPressed = isShiftPressed;
+    console.log('[DragEnd] wasShiftPressed:', wasShiftPressed);
+    console.log('[DragEnd] activeId:', event.active.id, 'overId:', event.over?.id);
+    
     setActiveDragId(null);
+    setIsShiftPressed(false);
+    setHoveredNodeId(null);
+    
     const { active, over } = event;
     if (!over) {
       return;
@@ -156,15 +237,80 @@ export function SidebarTree({
       return;
     }
 
+    // Check if Shift was pressed - this takes priority over parent checking
+    if (wasShiftPressed) {
+      console.log('[DragEnd] Shift mode - attempting to move into folder');
+      // Shift mode: move into folder
+      const overNode = findNodeById(treeData, overId);
+      const activeNode = findNodeById(treeData, activeId);
+      
+      console.log('[DragEnd] Active node:', activeNode?.name, '(id:', activeId, ', parent_id:', activeNode?.parent_id, ')');
+      console.log('[DragEnd] Over node:', overNode?.name, '(id:', overId, ', parent_id:', overNode?.parent_id, ', is_task:', overNode?.is_task, ')');
+      console.log('[DragEnd] Active node children:', activeNode?.children?.map(c => `${c.name}(${c.id})`));
+      console.log('[DragEnd] Tree structure:', JSON.stringify(treeData, null, 2));
+      
+      if (!overNode) {
+        console.log('[DragEnd] Over node not found, aborting');
+        return;
+      }
+      
+      if (overNode.is_task) {
+        console.log('[DragEnd] Cannot drop into a task, aborting');
+        return;
+      }
+      
+      // Don't allow dropping a node onto its own descendant
+      const activeNodeFromTree = findNodeById(treeData, activeId);
+      const isTargetDescendant = activeNodeFromTree ? isDescendant([activeNodeFromTree], activeNodeFromTree.id, overId) : false;
+      
+      if (isTargetDescendant) {
+        console.log('[DragEnd] Cannot drop node onto its own descendant, aborting');
+        return;
+      }
+      
+      // Check if active node is already a child of over node
+      if (activeNode?.parent_id === overId) {
+        console.log('[DragEnd] Node is already a child of target, aborting');
+        return;
+      }
+      
+      if (onMove) {
+        console.log('[DragEnd] Calling onMove with activeId:', activeId, 'newParentId:', overId);
+        const updatedTree = moveNodeWithinTree(treeData, activeId, overId);
+        setTreeData(updatedTree);
+        isSyncingRef.current = true;
+        const maybePromise = onMove(activeId, overId);
+        if (maybePromise && typeof (maybePromise as Promise<unknown>).then === 'function') {
+          void (maybePromise as Promise<unknown>)
+            .then(() => {
+              isSyncingRef.current = false;
+            })
+            .catch((error) => {
+              console.error('[DragEnd] Move operation failed:', error);
+              isSyncingRef.current = false;
+              setTreeData(latestNodesRef.current);
+            });
+        } else {
+          isSyncingRef.current = false;
+        }
+      }
+      return; // Exit early when Shift was pressed
+    }
+
+    // Normal mode: reorder within same parent
     const activeParentId = (active.data.current?.parentId ?? null) as number | null;
     const overParentId = (over.data.current?.parentId ?? null) as number | null;
 
-    // Same parent - just reorder
     if (activeParentId === overParentId) {
+      console.log('[DragEnd] Reordering within same parent:', activeParentId);
+      console.log('[DragEnd] Before reorder, treeData:', JSON.stringify(treeData.map(n => ({ id: n.id, name: n.name, children: n.children?.map(c => ({ id: c.id, name: c.name })) })), null, 2));
+      
       const updatedTree = reorderWithinParent(treeData, activeParentId, activeId, overId);
       if (updatedTree === treeData) {
         return;
       }
+
+      console.log('[DragEnd] After reorder, updatedTree:', JSON.stringify(updatedTree.map(n => ({ id: n.id, name: n.name, children: n.children?.map(c => ({ id: c.id, name: c.name })) })), null, 2));
 
       // Optimistic update
       setTreeData(updatedTree);
@@ -176,6 +322,7 @@ export function SidebarTree({
 
       debounceTimerRef.current = setTimeout(() => {
         const orderedIds = getChildOrder(updatedTree, activeParentId);
+        console.log('[DragEnd] Sending reorder to backend - parentId:', activeParentId, 'orderedIds:', orderedIds);
         if (orderedIds.length > 0 && onReorder) {
           isSyncingRef.current = true;
           const maybePromise = onReorder(activeParentId, orderedIds);
@@ -193,39 +340,41 @@ export function SidebarTree({
           }
         }
       }, 600); // 600ms debounce
-      return;
-    }
-
-    // Different parent - check if dropping onto a project for reparenting
-    const overNode = findNodeById(treeData, overId);
-    if (overNode && !overNode.is_task) {
-      // Don't allow dropping a node onto its own descendant
-      if (isDescendant(treeData, activeId, overId)) {
-        return;
-      }
-      if (onMove) {
-        const updatedTree = moveNodeWithinTree(treeData, activeId, overId);
-        setTreeData(updatedTree);
-        isSyncingRef.current = true;
-        const maybePromise = onMove(activeId, overId);
-        if (maybePromise && typeof (maybePromise as Promise<unknown>).then === 'function') {
-          void (maybePromise as Promise<unknown>)
-            .then(() => {
-              isSyncingRef.current = false;
-            })
-            .catch(() => {
-              isSyncingRef.current = false;
-              setTreeData(latestNodesRef.current);
-            });
-        } else {
-          isSyncingRef.current = false;
-        }
-      }
     }
   };
 
   const handleDragCancel = () => {
     setActiveDragId(null);
+    setIsShiftPressed(false);
+    setHoveredNodeId(null);
+    setOverNodeId(null);
+  };
+
+  const collapseAll = () => {
+    setExpandedNodes(new Set());
+  };
+
+  const expandAll = () => {
+    const rootLevelIds = new Set<number>();
+    // Only expand root level nodes (direct children), not grandchildren
+    treeData.forEach(node => {
+      if (!node.is_task) {
+        rootLevelIds.add(node.id);
+      }
+    });
+    setExpandedNodes(rootLevelIds);
+  };
+
+  const toggleNodeExpansion = (nodeId: number) => {
+    setExpandedNodes(prev => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) {
+        next.delete(nodeId);
+      } else {
+        next.add(nodeId);
+      }
+      return next;
+    });
   };
 
   return (
@@ -244,26 +393,58 @@ export function SidebarTree({
             >
               {openedProjectName || 'All Projects'}
             </h2>
-            <button
-              onClick={() => setShowProjectPicker(true)}
-              className={cn(
-                'p-1.5 rounded-md transition-all flex-shrink-0',
-                'hover:bg-primary/20 border border-transparent hover:border-primary/30',
-                'text-muted-foreground hover:text-primary'
-              )}
-              title="Open Project"
-            >
-              <Folder className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={expandedNodes.size > 0 ? collapseAll : expandAll}
+                className={cn(
+                  'p-1.5 rounded-md transition-all flex-shrink-0',
+                  'hover:bg-primary/20 border border-transparent hover:border-primary/30',
+                  'text-muted-foreground hover:text-primary'
+                )}
+                title={expandedNodes.size > 0 ? "Collapse All" : "Expand All"}
+              >
+                {expandedNodes.size > 0 ? (
+                  <ChevronsDownUp className="w-4 h-4" />
+                ) : (
+                  <ChevronsUpDown className="w-4 h-4" />
+                )}
+              </button>
+              <button
+                onClick={() => setShowProjectPicker(true)}
+                className={cn(
+                  'p-1.5 rounded-md transition-all flex-shrink-0',
+                  'hover:bg-primary/20 border border-transparent hover:border-primary/30',
+                  'text-muted-foreground hover:text-primary'
+                )}
+                title="Open Project"
+              >
+                <Folder className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
 
         <div className="p-3 overflow-y-auto flex-1" onWheel={handleWheel}>
+          {/* Shift key indicator during drag */}
+          {activeDragId && (
+            <div className={cn(
+              "fixed top-4 left-1/2 transform -translate-x-1/2 z-50 px-4 py-2 rounded-lg shadow-lg transition-all",
+              isShiftPressed 
+                ? "bg-primary text-primary-foreground" 
+                : "bg-muted text-muted-foreground"
+            )}>
+              <span className="text-sm font-medium">
+                {isShiftPressed ? "🎯 Drop into folder mode" : "↕️ Reorder mode (Hold Shift to move into folder)"}
+              </span>
+            </div>
+          )}
+          
           <DndContext
             sensors={sensors}
             collisionDetection={collisionDetection}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
+            onDragOver={handleDragOver}
             onDragCancel={handleDragCancel}
           >
             <SortableContext items={treeData.map(node => node.id)} strategy={verticalListSortingStrategy}>
@@ -277,7 +458,17 @@ export function SidebarTree({
                   onAddProject={onAddProject}
                   onAddTask={onAddTask}
                   onRename={onRename}
+                  onDelete={onDelete}
+                  onArchive={onArchive}
                   level={0}
+                  isShiftPressed={isShiftPressed}
+                  hoveredNodeId={hoveredNodeId}
+                  activeDragId={activeDragId}
+                  overNodeId={overNodeId}
+                  isExpanded={expandedNodes.has(node.id)}
+                  onToggleExpand={() => toggleNodeExpansion(node.id)}
+                  expandedNodes={expandedNodes}
+                  toggleNodeExpansion={toggleNodeExpansion}
                 />
               ))}
             </SortableContext>
@@ -357,22 +548,53 @@ interface TreeNodeProps {
   onAddProject: (parentId?: number, name?: string) => void;
   onAddTask: (projectId: number, name?: string) => void;
   onRename?: (nodeId: number, newName: string) => void;
+  onArchive?: (nodeId: number, archive: boolean) => void | Promise<unknown>;
+  onDelete?: (nodeId: number) => void | Promise<unknown>;
   level: number;
+  isShiftPressed: boolean;
+  hoveredNodeId: number | null;
+  activeDragId: number | null;
+  overNodeId: number | null;
+  isDraggingAncestor?: boolean;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  expandedNodes: Set<number>;
+  toggleNodeExpansion: (nodeId: number) => void;
 }
 
-function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTask, onRename, level }: TreeNodeProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTask, onRename, onArchive, onDelete, level, isShiftPressed, hoveredNodeId, activeDragId, overNodeId, isDraggingAncestor, isExpanded, onToggleExpand, expandedNodes, toggleNodeExpansion }: TreeNodeProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [editName, setEditName] = useState(node.name);
   const [showAddInput, setShowAddInput] = useState(false);
   const [addInputType, setAddInputType] = useState<'project' | 'task'>('project');
   const [addName, setAddName] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isArchivedExpanded, setIsArchivedExpanded] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
   const addInputRef = useRef<HTMLInputElement>(null);
   const childNodes = node.children ?? [];
   const canExpand = !node.is_task;
   const isSelected = selectedId === node.id;
+  const isArchived = node.status === 'archived';
+
+  const { activeChildNodes, archivedChildNodes } = useMemo(() => {
+    const active: Node[] = [];
+    const archived: Node[] = [];
+
+    childNodes.forEach(child => {
+      if (child.status === 'archived') {
+        archived.push(child);
+      } else {
+        active.push(child);
+      }
+    });
+
+    return {
+      activeChildNodes: active,
+      archivedChildNodes: archived,
+    };
+  }, [childNodes]);
 
   const {
     attributes,
@@ -384,6 +606,7 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
   } = useSortable({
     id: node.id,
     data: { parentId },
+    disabled: isDraggingAncestor ?? false,
   });
 
   useEffect(() => {
@@ -402,6 +625,12 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
       addInputRef.current.focus();
     }
   }, [showAddInput]);
+
+  useEffect(() => {
+    if (isArchived && showAddInput) {
+      setShowAddInput(false);
+    }
+  }, [isArchived, showAddInput]);
 
   const handleRename = () => {
     if (editName.trim() && editName !== node.name && onRename) {
@@ -432,7 +661,7 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
 
   const handleCreateAdd = () => {
     const trimmedName = addName.trim();
-    if (!trimmedName) return;
+    if (!trimmedName || isArchived) return;
 
     if (addInputType === 'project') {
       onAddProject(node.id, trimmedName);
@@ -445,27 +674,34 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
   };
 
   const handleStartAdd = (type: 'project' | 'task') => {
-    if (node.is_task) {
+    if (node.is_task || isArchived) {
       return;
     }
     setAddInputType(type);
     setAddName('');
     setShowAddInput(true);
-    setIsExpanded(true);
+    if (!isExpanded) {
+      onToggleExpand();
+    }
   };
 
   const handleClick = () => {
     onSelect(node.id);
     if (canExpand) {
-      setIsExpanded(prev => !prev);
+      onToggleExpand();
     }
+  };
+
+
+
+  // Remove transforms during drag - elements stay in place, only show drop indicator
+  const wrapperStyle: CSSProperties = {
+    opacity: isDragging ? 0.4 : 1,
+    zIndex: isDragging ? 1000 : undefined,
   };
 
   const rowStyle: CSSProperties = {
     paddingLeft: `${level * 20 + 8}px`,
-    transform: transform ? CSS.Transform.toString(transform) : undefined,
-    transition,
-    opacity: isDragging ? 0.6 : 1,
   };
 
   const statusIndicator = node.is_task
@@ -479,19 +715,142 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
       )
     : undefined;
 
-  return (
-    <div className="relative">
-      {level > 0 && (
-        <div
-          className="absolute left-0 top-0 bottom-0 w-px bg-border"
-          style={{ left: `${(level - 1) * 20 + 10}px` }}
-        />
-      )}
+  const folderIconClass = isArchived
+    ? 'text-muted-foreground/60'
+    : isSelected
+      ? 'text-accent'
+      : 'text-muted-foreground';
 
-      <div
-        ref={setNodeRef}
-        {...listeners}
-        {...attributes}
+  const nameClasses = cn(
+    'text-sm truncate flex-1 text-foreground',
+    node.is_task && node.status === 'done' && 'text-muted-foreground line-through',
+    isArchived && 'text-muted-foreground/80 italic',
+  );
+
+  const archivedChildCount = archivedChildNodes.length;
+  const hasArchivedChildren = archivedChildCount > 0;
+
+  const menuSections: { key: string; content: ReactNode }[] = [];
+
+  if (!node.is_task && !isArchived) {
+    menuSections.push({
+      key: 'add',
+      content: (
+        <>
+          <button
+            className="w-full px-3 py-1.5 text-xs text-left text-foreground hover:bg-secondary hover:text-primary transition-all font-medium flex items-center gap-2"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleStartAdd('project');
+            }}
+          >
+            <Plus className="w-3 h-3" />
+            Add Project
+          </button>
+          {onAddTask && (
+            <>
+              <div className="h-px bg-border my-0.5" />
+              <button
+                className="w-full px-3 py-1.5 text-xs text-left text-foreground hover:bg-secondary hover:text-primary transition-all font-medium flex items-center gap-2"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleStartAdd('task');
+                }}
+              >
+                <Plus className="w-3 h-3" />
+                Add Task
+              </button>
+            </>
+          )}
+        </>
+      ),
+    });
+  }
+
+  if (onRename) {
+    menuSections.push({
+      key: 'rename',
+      content: (
+        <button
+          className="w-full px-3 py-1.5 text-xs text-left text-foreground hover:bg-secondary hover:text-primary transition-all font-medium flex items-center gap-2"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsRenaming(true);
+          }}
+        >
+          <Pencil className="w-3 h-3" />
+          Rename
+        </button>
+      ),
+    });
+  }
+
+  if (onArchive) {
+    menuSections.push({
+      key: 'archive',
+      content: (
+        <button
+          className="w-full px-3 py-1.5 text-xs text-left text-foreground hover:bg-secondary hover:text-primary transition-all font-medium flex items-center gap-2"
+          onClick={(e) => {
+            e.stopPropagation();
+            onArchive(node.id, !isArchived);
+          }}
+        >
+          {isArchived ? <ArchiveRestore className="w-3 h-3" /> : <Archive className="w-3 h-3" />}
+          {isArchived ? 'Restore' : 'Archive'}
+        </button>
+      ),
+    });
+  }
+
+  if (onDelete) {
+    menuSections.push({
+      key: 'delete',
+      content: (
+        <button
+          className="w-full px-3 py-1.5 text-xs text-left text-destructive hover:bg-destructive/10 transition-all font-medium flex items-center gap-2"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowDeleteConfirm(true);
+          }}
+        >
+          <Trash2 className="w-3 h-3" />
+          Delete
+        </button>
+      ),
+    });
+  }
+
+  // Check if this node is a valid drop target when Shift is pressed
+  // Only show highlight if: not a task, Shift pressed, being hovered, not dragging self, and not already the parent
+  const isAlreadyParent = node.children?.some(child => child.id === activeDragId) || false;
+  const isShiftDropTarget = !node.is_task && isShiftPressed && hoveredNodeId === node.id && activeDragId !== null && activeDragId !== node.id && !isAlreadyParent;
+  
+  // Show drop indicator line when hovering over this node (not in Shift mode)
+  const showDropIndicator = !isShiftPressed && overNodeId === node.id && activeDragId !== null && activeDragId !== node.id;
+
+  return (
+    <div ref={setNodeRef} className="relative" style={wrapperStyle} {...attributes}>
+        {/* Drop indicator line - shows where item will be dropped */}
+        {showDropIndicator && (
+          <div className="absolute left-0 right-0 top-0 h-0.5 bg-primary z-20 pointer-events-none" 
+               style={{ left: `${level * 20}px` }} />
+        )}
+
+        {level > 0 && (
+          <div
+            className="absolute left-0 top-0 bottom-0 w-px bg-border"
+            style={{ left: `${(level - 1) * 20 + 10}px` }}
+          />
+        )}
+
+        {/* Visual feedback for Shift+drag drop target */}
+        {isShiftDropTarget && (
+          <div className="absolute inset-0 rounded-lg ring-2 ring-primary ring-inset pointer-events-none z-10 bg-primary/5" />
+        )}
+
+        <div
+          {...listeners}
         className={cn(
           'group flex items-center gap-2 py-2 px-2 rounded-lg cursor-pointer transition-all select-none',
           'hover:bg-secondary/50',
@@ -499,6 +858,8 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
             ? 'bg-secondary border-l-3 border-accent font-medium shadow-sm'
             : 'border-l-3 border-transparent hover-border-accent/30',
           isDragging && 'cursor-grabbing',
+          isShiftDropTarget && 'ring-2 ring-primary',
+          isArchived && !isSelected && 'opacity-70',
         )}
         style={rowStyle}
         onClick={handleClick}
@@ -523,9 +884,9 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
             <span className={statusIndicator} />
           </div>
         ) : isExpanded ? (
-          <FolderOpen className={cn('w-4 h-4 flex-shrink-0', isSelected ? 'text-accent' : 'text-muted-foreground')} />
+          <FolderOpen className={cn('w-4 h-4 flex-shrink-0', folderIconClass)} />
         ) : (
-          <Folder className={cn('w-4 h-4 flex-shrink-0', isSelected ? 'text-accent' : 'text-muted-foreground')} />
+          <Folder className={cn('w-4 h-4 flex-shrink-0', folderIconClass)} />
         )}
 
         {isRenaming ? (
@@ -540,14 +901,14 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
-          <span
-            className={cn(
-              'text-sm truncate flex-1',
-              node.is_task && node.status === 'done' ? 'text-muted-foreground line-through' : 'text-foreground',
+          <div className="flex-1 flex items-center gap-2 min-w-0">
+            <span className={nameClasses}>{node.name}</span>
+            {isArchived && (
+              <span className="text-[10px] uppercase font-semibold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                Archived
+              </span>
             )}
-          >
-            {node.name}
-          </span>
+          </div>
         )}
 
         {isHovered && !isRenaming && (
@@ -564,47 +925,15 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
                 className="absolute right-0 top-full mt-1 min-w-[150px] bg-card border-2 border-primary/20 rounded-lg shadow-xl py-1 z-50 opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all"
                 onClick={(e) => e.stopPropagation()}
               >
-                {!node.is_task && (
-                  <>
-                    <button
-                      className="w-full px-3 py-1.5 text-xs text-left text-foreground hover:bg-secondary hover:text-primary transition-all font-medium flex items-center gap-2"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleStartAdd('project');
-                      }}
-                    >
-                      <Plus className="w-3 h-3" />
-                      Add Project
-                    </button>
-                    {onAddTask && (
-                      <>
-                        <div className="h-px bg-border my-0.5" />
-                        <button
-                          className="w-full px-3 py-1.5 text-xs text-left text-foreground hover:bg-secondary hover:text-primary transition-all font-medium flex items-center gap-2"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleStartAdd('task');
-                          }}
-                        >
-                          <Plus className="w-3 h-3" />
-                          Add Task
-                        </button>
-                      </>
-                    )}
-                    {onRename && <div className="h-px bg-border my-0.5" />}
-                  </>
-                )}
-                {onRename && (
-                  <button
-                    className="w-full px-3 py-1.5 text-xs text-left text-foreground hover:bg-secondary hover:text-primary transition-all font-medium flex items-center gap-2"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsRenaming(true);
-                    }}
-                  >
-                    <Pencil className="w-3 h-3" />
-                    Rename
-                  </button>
+                {menuSections.length === 0 ? (
+                  <div className="px-3 py-2 text-xs text-muted-foreground">No actions available</div>
+                ) : (
+                  menuSections.map((section, index) => (
+                    <Fragment key={section.key}>
+                      {index > 0 && <div className="h-px bg-border my-0.5" />}
+                      {section.content}
+                    </Fragment>
+                  ))
                 )}
               </div>
             </div>
@@ -612,10 +941,103 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
         )}
       </div>
 
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {node.is_task ? 'Task' : 'Project'}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{node.name}"?
+              {!node.is_task && (node.children?.length ?? 0) > 0 && (
+                <span className="block mt-2 text-destructive font-medium">
+                  This will also delete all {node.children?.length} child item{node.children?.length !== 1 ? 's' : ''}.
+                </span>
+              )}
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (onDelete) {
+                  onDelete(node.id);
+                }
+                setShowDeleteConfirm(false);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {!node.is_task && isExpanded && (
-        <div className="animate-accordion-down">
-          <SortableContext items={childNodes.map(child => child.id)} strategy={verticalListSortingStrategy}>
-            {childNodes.map(child => (
+        <>
+          {archivedChildNodes.length > 0 && (
+            <>
+              <div className="relative">
+                {level >= 0 && (
+                  <div
+                    className="absolute left-0 top-0 bottom-0 w-px bg-border"
+                    style={{ left: `${level * 20 + 10}px` }}
+                  />
+                )}
+                <div
+                  className={cn(
+                    'group flex items-center gap-2 py-2 px-2 rounded-lg cursor-pointer transition-all',
+                    'hover:bg-secondary/50',
+                  )}
+                  style={{ paddingLeft: `${(level + 1) * 20 + 8}px` }}
+                  onClick={() => setIsArchivedExpanded(prev => !prev)}
+                >
+                  <div
+                    className={cn(
+                      'flex-shrink-0 w-4 h-4 flex items-center justify-center transition-transform text-muted-foreground',
+                      isArchivedExpanded && 'rotate-90',
+                    )}
+                  >
+                    <ChevronRight className="w-3 h-3" />
+                  </div>
+                  <Archive className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
+                  <span className="text-sm font-medium text-muted-foreground">Archived</span>
+                  <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full ml-1">{archivedChildCount}</span>
+                </div>
+              </div>
+              {isArchivedExpanded && (
+                <SortableContext items={archivedChildNodes.map(child => child.id)} strategy={verticalListSortingStrategy}>
+                  {archivedChildNodes.map(child => (
+                    <TreeNode
+                      key={`archived-${child.id}`}
+                      node={child}
+                      parentId={node.id}
+                      selectedId={selectedId}
+                      onSelect={onSelect}
+                      onAddProject={onAddProject}
+                      onAddTask={onAddTask}
+                      onRename={onRename}
+                      onArchive={onArchive}
+                      onDelete={onDelete}
+                      level={level + 1}
+                      isShiftPressed={isShiftPressed}
+                      hoveredNodeId={hoveredNodeId}
+                      activeDragId={activeDragId}
+                      overNodeId={overNodeId}
+                      isDraggingAncestor={isDragging || isDraggingAncestor}
+                      isExpanded={expandedNodes.has(child.id)}
+                      onToggleExpand={() => toggleNodeExpansion(child.id)}
+                      expandedNodes={expandedNodes}
+                      toggleNodeExpansion={toggleNodeExpansion}
+                    />
+                  ))}
+                </SortableContext>
+              )}
+            </>
+          )}
+
+          {isDragging ? (
+            // When this node is being dragged, children stay in place with reduced opacity
+            activeChildNodes.map(child => (
               <TreeNode
                 key={child.id}
                 node={child}
@@ -625,13 +1047,57 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
                 onAddProject={onAddProject}
                 onAddTask={onAddTask}
                 onRename={onRename}
+                onArchive={onArchive}
+                onDelete={onDelete}
                 level={level + 1}
+                isShiftPressed={isShiftPressed}
+                hoveredNodeId={hoveredNodeId}
+                activeDragId={activeDragId}
+                overNodeId={overNodeId}
+                isDraggingAncestor={true}
+                isExpanded={expandedNodes.has(child.id)}
+                onToggleExpand={() => toggleNodeExpansion(child.id)}
+                expandedNodes={expandedNodes}
+                toggleNodeExpansion={toggleNodeExpansion}
               />
-            ))}
-          </SortableContext>
+            ))
+          ) : (
+            <SortableContext items={activeChildNodes.map(child => child.id)} strategy={verticalListSortingStrategy}>
+              {activeChildNodes.map(child => (
+                <TreeNode
+                  key={child.id}
+                  node={child}
+                  parentId={node.id}
+                  selectedId={selectedId}
+                  onSelect={onSelect}
+                  onAddProject={onAddProject}
+                  onAddTask={onAddTask}
+                  onRename={onRename}
+                  onArchive={onArchive}
+                  onDelete={onDelete}
+                  level={level + 1}
+                  isShiftPressed={isShiftPressed}
+                  hoveredNodeId={hoveredNodeId}
+                  activeDragId={activeDragId}
+                  overNodeId={overNodeId}
+                  isDraggingAncestor={false}
+                  isExpanded={expandedNodes.has(child.id)}
+                  onToggleExpand={() => toggleNodeExpansion(child.id)}
+                  expandedNodes={expandedNodes}
+                  toggleNodeExpansion={toggleNodeExpansion}
+                />
+              ))}
+            </SortableContext>
+          )}
 
-          {showAddInput && (
+          {!isArchived && showAddInput && (
             <div className="relative" style={{ paddingLeft: `${(level + 1) * 20 + 8}px` }}>
+              {level >= 0 && (
+                <div
+                  className="absolute left-0 top-0 bottom-0 w-px bg-border"
+                  style={{ left: `${level * 20 + 10}px` }}
+                />
+              )}
               <div className="flex items-center gap-2 py-2 px-2">
                 <input
                   ref={addInputRef}
@@ -666,7 +1132,7 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
               </div>
             </div>
           )}
-        </div>
+        </>
       )}
     </div>
   );
