@@ -9,6 +9,7 @@ import {
   type CollisionDetection,
   useSensor,
   useSensors,
+  useDroppable,
 } from '@dnd-kit/core';
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -182,8 +183,14 @@ export function SidebarTree({
 
   const handleDragOver = useCallback((event: any) => {
     if (event.over) {
-      setHoveredNodeId(Number(event.over.id));
-      setOverNodeId(Number(event.over.id));
+      // Check if hovering over the bottom drop zone
+      if (event.over.id === 'bottom-drop-zone') {
+        setHoveredNodeId(null);
+        setOverNodeId(-1); // Use -1 to indicate bottom drop zone
+      } else {
+        setHoveredNodeId(Number(event.over.id));
+        setOverNodeId(Number(event.over.id));
+      }
     } else {
       setHoveredNodeId(null);
       setOverNodeId(null);
@@ -232,15 +239,69 @@ export function SidebarTree({
 
   const handleDragEnd = (event: DragEndEvent) => {
     const wasShiftPressed = isShiftPressed;
+    const { active, over } = event;
+    
     console.log('[DragEnd] wasShiftPressed:', wasShiftPressed);
-    console.log('[DragEnd] activeId:', event.active.id, 'overId:', event.over?.id);
+    console.log('[DragEnd] activeId:', active.id, 'overId:', over?.id);
+    console.log('[DragEnd] active.data:', active.data.current);
+    console.log('[DragEnd] over.data:', over?.data?.current);
     
     setActiveDragId(null);
     setIsShiftPressed(false);
     setHoveredNodeId(null);
+    setOverNodeId(null);
     
-    const { active, over } = event;
     if (!over) {
+      console.log('[DragEnd] No over target, aborting');
+      return;
+    }
+
+    // Check if dropped on the bottom drop zone
+    if (over.id === 'bottom-drop-zone') {
+      console.log('[DragEnd] Dropped on bottom zone, moving to end');
+      const activeId = Number(active.id);
+      const activeParentId = (active.data.current?.parentId ?? null) as number | null;
+      
+      // Only handle root-level reordering for now
+      if (activeParentId === null) {
+        const activeIndex = treeData.findIndex(node => node.id === activeId);
+        if (activeIndex !== -1 && activeIndex !== treeData.length - 1) {
+          // Move to last position
+          const updatedTree = arrayMove(treeData, activeIndex, treeData.length - 1);
+          setTreeData(updatedTree);
+          
+          const shouldSyncWithBackend = Boolean(onReorder);
+          if (shouldSyncWithBackend) {
+            isSyncingRef.current = true;
+          }
+
+          if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current);
+          }
+
+          debounceTimerRef.current = setTimeout(() => {
+            const orderedIds = updatedTree.map(node => node.id);
+            console.log('[DragEnd] Sending bottom drop reorder to backend - parentId: null orderedIds:', orderedIds);
+            if (orderedIds.length > 0 && onReorder) {
+              const maybePromise = onReorder(null, orderedIds);
+              if (maybePromise && typeof (maybePromise as Promise<unknown>).then === 'function') {
+                void (maybePromise as Promise<unknown>)
+                  .then(() => {
+                    isSyncingRef.current = false;
+                  })
+                  .catch(() => {
+                    isSyncingRef.current = false;
+                    console.error("Failed to save reorder");
+                  });
+              } else {
+                isSyncingRef.current = false;
+              }
+            } else if (shouldSyncWithBackend) {
+              isSyncingRef.current = false;
+            }
+          }, 600);
+        }
+      }
       return;
     }
 
@@ -248,6 +309,7 @@ export function SidebarTree({
     const overId = Number(over.id);
 
     if (activeId === overId) {
+      console.log('[DragEnd] Dragged onto self, aborting');
       return;
     }
 
@@ -315,7 +377,11 @@ export function SidebarTree({
     const activeParentId = (active.data.current?.parentId ?? null) as number | null;
     const overParentId = (over.data.current?.parentId ?? null) as number | null;
 
-    if (activeParentId === overParentId) {
+    // Allow reordering if parents match OR if dragging to root level
+    const canReorder = activeParentId === overParentId || 
+                       (activeParentId === null && overParentId === null);
+
+    if (canReorder) {
       console.log('[DragEnd] Reordering within same parent:', activeParentId);
       console.log('[DragEnd] Before reorder, treeData:', JSON.stringify(treeData.map(n => ({ id: n.id, name: n.name, children: n.children?.map(c => ({ id: c.id, name: c.name })) })), null, 2));
       
@@ -334,11 +400,15 @@ export function SidebarTree({
         clearTimeout(debounceTimerRef.current);
       }
 
+      const shouldSyncWithBackend = Boolean(onReorder);
+      if (shouldSyncWithBackend) {
+        isSyncingRef.current = true;
+      }
+
       debounceTimerRef.current = setTimeout(() => {
         const orderedIds = getChildOrder(updatedTree, activeParentId);
         console.log('[DragEnd] Sending reorder to backend - parentId:', activeParentId, 'orderedIds:', orderedIds);
         if (orderedIds.length > 0 && onReorder) {
-          isSyncingRef.current = true;
           const maybePromise = onReorder(activeParentId, orderedIds);
           if (maybePromise && typeof (maybePromise as Promise<unknown>).then === 'function') {
             void (maybePromise as Promise<unknown>)
@@ -352,6 +422,8 @@ export function SidebarTree({
           } else {
             isSyncingRef.current = false;
           }
+        } else if (shouldSyncWithBackend) {
+          isSyncingRef.current = false;
         }
       }, 600); // 600ms debounce
     }
@@ -484,8 +556,16 @@ export function SidebarTree({
                   expandedNodes={expandedNodes}
                   toggleNodeExpansion={toggleNodeExpansion}
                   onSetDeadline={onSetDeadline}
+                  allNodes={treeData}
                 />
               ))}
+              {activeDragId && treeData.length > 0 && (
+                <DropZone 
+                  id="bottom-drop-zone"
+                  isActive={overNodeId === -1}
+                  level={0}
+                />
+              )}
             </SortableContext>
 
             <DragOverlay dropAnimation={null}>
@@ -576,9 +656,10 @@ interface TreeNodeProps {
   expandedNodes: Set<number>;
   toggleNodeExpansion: (nodeId: number) => void;
   onSetDeadline?: (nodeId: number, deadline: string | null) => void | Promise<unknown>;
+  allNodes: Node[];
 }
 
-function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTask, onRename, onArchive, onDelete, level, isShiftPressed, hoveredNodeId, activeDragId, overNodeId, isDraggingAncestor, isExpanded, onToggleExpand, expandedNodes, toggleNodeExpansion, onSetDeadline }: TreeNodeProps) {
+function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTask, onRename, onArchive, onDelete, level, isShiftPressed, hoveredNodeId, activeDragId, overNodeId, isDraggingAncestor, isExpanded, onToggleExpand, expandedNodes, toggleNodeExpansion, onSetDeadline, allNodes }: TreeNodeProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [editName, setEditName] = useState(node.name);
@@ -918,17 +999,24 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
   const isAlreadyParent = node.children?.some(child => child.id === activeDragId) || false;
   const isShiftDropTarget = !node.is_task && isShiftPressed && hoveredNodeId === node.id && activeDragId !== null && activeDragId !== node.id && !isAlreadyParent;
   
+  // Determine if we're dragging upward or downward to show indicator correctly
+  const isDraggingDown = useMemo(() => {
+    if (activeDragId === null || overNodeId === null) return false;
+    
+    // Get the list of siblings at this level
+    const siblings = parentId === null ? allNodes : allNodes.flatMap(n => n.children ?? []);
+    const activeIndex = siblings.findIndex(n => n.id === activeDragId);
+    const overIndex = siblings.findIndex(n => n.id === node.id);
+    
+    return activeIndex < overIndex;
+  }, [activeDragId, overNodeId, node.id, parentId, allNodes]);
+  
   // Show drop indicator line when hovering over this node (not in Shift mode)
+  // Position depends on drag direction: bottom when dragging down, top when dragging up
   const showDropIndicator = !isShiftPressed && overNodeId === node.id && activeDragId !== null && activeDragId !== node.id;
 
   return (
     <div ref={setNodeRef} className="relative" style={wrapperStyle} {...attributes}>
-        {/* Drop indicator line - shows where item will be dropped */}
-        {showDropIndicator && (
-          <div className="absolute left-0 right-0 top-0 h-0.5 bg-primary z-20 pointer-events-none" 
-               style={{ left: `${level * 20}px` }} />
-        )}
-
         {level > 0 && (
           <div
             className="absolute left-0 top-0 bottom-0 w-px bg-border"
@@ -936,9 +1024,20 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
           />
         )}
 
+        {/* Drop indicator line - shows where item will be dropped */}
+        {showDropIndicator && (
+          <div 
+            className={cn(
+              "absolute left-0 right-0 h-[3px] bg-primary z-30 pointer-events-none shadow-[0_0_8px_rgba(var(--primary),0.6)]",
+              isDraggingDown ? "bottom-0" : "-top-px"
+            )}
+            style={{ left: `${level * 20 + 8}px` }} 
+          />
+        )}
+
         {/* Visual feedback for Shift+drag drop target */}
         {isShiftDropTarget && (
-          <div className="absolute inset-0 rounded-lg ring-2 ring-primary ring-inset pointer-events-none z-10 bg-primary/5" />
+          <div className="absolute inset-0 rounded-lg ring-2 ring-primary ring-inset pointer-events-none z-10 bg-primary/10 shadow-[inset_0_0_12px_rgba(var(--primary),0.3)]" />
         )}
 
         <div
@@ -1163,6 +1262,7 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
                       expandedNodes={expandedNodes}
                       toggleNodeExpansion={toggleNodeExpansion}
                       onSetDeadline={onSetDeadline}
+                      allNodes={allNodes}
                     />
                   ))}
                 </SortableContext>
@@ -1195,6 +1295,7 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
                 expandedNodes={expandedNodes}
                 toggleNodeExpansion={toggleNodeExpansion}
                 onSetDeadline={onSetDeadline}
+                allNodes={allNodes}
               />
             ))
           ) : (
@@ -1222,6 +1323,7 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
                   expandedNodes={expandedNodes}
                   toggleNodeExpansion={toggleNodeExpansion}
                   onSetDeadline={onSetDeadline}
+                  allNodes={allNodes}
                 />
               ))}
             </SortableContext>
@@ -1280,6 +1382,24 @@ const DragPreview = ({ node }: { node: Node }) => (
     <span className="text-sm font-medium text-foreground">{node.name}</span>
   </div>
 );
+
+const DropZone = ({ id, isActive, level }: { id: string; isActive: boolean; level: number }) => {
+  const { setNodeRef } = useDroppable({ id });
+  
+  return (
+    <div 
+      ref={setNodeRef}
+      className="relative min-h-[200px]"
+    >
+      {isActive && (
+        <div 
+          className="absolute left-0 right-0 top-0 h-[3px] bg-primary z-30 pointer-events-none shadow-[0_0_8px_rgba(var(--primary),0.6)]" 
+          style={{ left: `${level * 20 + 8}px` }} 
+        />
+      )}
+    </div>
+  );
+};
 
 const findNodeById = (nodes: Node[], id: number): Node | null => {
   for (const node of nodes) {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LayoutGrid, PanelLeft, PanelLeftClose, Plus, RefreshCw, Search, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -59,8 +59,13 @@ const Index = () => {
   const [openedProjectId, setOpenedProjectId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const pendingReordersRef = useRef(0);
+  const [pendingReorderCount, setPendingReorderCount] = useState(0);
 
-  const refreshTree = useCallback(async () => {
+  const refreshTree = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
+    if (!force && pendingReordersRef.current > 0) {
+      return;
+    }
     setLoading(true);
     try {
       const { roots, map } = await loadTree();
@@ -172,6 +177,13 @@ const Index = () => {
 
   const handleReorder = useCallback(
     async (parentId: number | null, orderedIds: number[]) => {
+      if (orderedIds.length === 0) {
+        return;
+      }
+
+      pendingReordersRef.current += 1;
+      setPendingReorderCount(pendingReordersRef.current);
+
       try {
         await reorderNodesApi({ parentId: parentId ?? null, orderedIds });
       } catch (err) {
@@ -181,7 +193,11 @@ const Index = () => {
         });
         throw err;
       } finally {
-        void refreshTree();
+        pendingReordersRef.current = Math.max(0, pendingReordersRef.current - 1);
+        setPendingReorderCount(pendingReordersRef.current);
+        if (pendingReordersRef.current === 0) {
+          await refreshTree({ force: true });
+        }
       }
     },
     [refreshTree],
@@ -372,7 +388,11 @@ const Index = () => {
 
           {/* Actions */}
           <div className="flex items-center gap-2">
-            {loading && <span className="text-xs text-muted-foreground">Syncing…</span>}
+            {(loading || pendingReorderCount > 0) && (
+              <span className="text-xs text-muted-foreground">
+                {pendingReorderCount > 0 ? 'Reordering…' : 'Syncing…'}
+              </span>
+            )}
             {error && <span className="text-xs text-destructive">{error}</span>}
             <ThemeToggle />
             <button
