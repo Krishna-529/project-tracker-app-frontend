@@ -13,7 +13,7 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Archive, ArchiveRestore, Calendar as CalendarIcon, ChevronRight, ChevronsDownUp, ChevronsUpDown, Folder, FolderOpen, MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, Calendar as CalendarIcon, ChevronRight, ChevronsDownUp, ChevronsUpDown, Folder, FolderOpen, MoreVertical, Pencil, Plus, Send, Trash2 } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { format } from 'date-fns';
@@ -58,6 +58,7 @@ interface SidebarTreeProps {
   onReorder?: (parentId: number | null, orderedIds: number[]) => void | Promise<unknown>;
   onMove?: (nodeId: number, newParentId: number | null) => void | Promise<unknown>;
   onSetDeadline?: (nodeId: number, deadline: string | null) => void | Promise<unknown>;
+  onSendToDailyQuest?: (nodeId: number) => void | Promise<unknown>;
   onSelectAll?: () => void;
   isAllSelected?: boolean;
   openedProjectName?: string | null;
@@ -78,6 +79,7 @@ export function SidebarTree({
   onReorder,
   onMove,
   onSetDeadline,
+  onSendToDailyQuest,
   onSelectAll,
   isAllSelected,
   openedProjectName,
@@ -556,6 +558,7 @@ export function SidebarTree({
                   expandedNodes={expandedNodes}
                   toggleNodeExpansion={toggleNodeExpansion}
                   onSetDeadline={onSetDeadline}
+                  onSendToDailyQuest={onSendToDailyQuest}
                   allNodes={treeData}
                 />
               ))}
@@ -656,10 +659,11 @@ interface TreeNodeProps {
   expandedNodes: Set<number>;
   toggleNodeExpansion: (nodeId: number) => void;
   onSetDeadline?: (nodeId: number, deadline: string | null) => void | Promise<unknown>;
+  onSendToDailyQuest?: (nodeId: number) => void | Promise<unknown>;
   allNodes: Node[];
 }
 
-function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTask, onRename, onArchive, onDelete, level, isShiftPressed, hoveredNodeId, activeDragId, overNodeId, isDraggingAncestor, isExpanded, onToggleExpand, expandedNodes, toggleNodeExpansion, onSetDeadline, allNodes }: TreeNodeProps) {
+function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTask, onRename, onArchive, onDelete, level, isShiftPressed, hoveredNodeId, activeDragId, overNodeId, isDraggingAncestor, isExpanded, onToggleExpand, expandedNodes, toggleNodeExpansion, onSetDeadline, onSendToDailyQuest, allNodes }: TreeNodeProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [editName, setEditName] = useState(node.name);
@@ -922,7 +926,8 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
     });
   }
 
-  if (!node.is_task && !isArchived && onSetDeadline) {
+  // Allow setting deadline for both projects and tasks
+  if (!isArchived && onSetDeadline) {
     menuSections.push({
       key: 'deadline',
       content: (
@@ -935,6 +940,25 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
         >
           <CalendarIcon className="w-3 h-3" />
           {node.deadline ? 'Change Deadline' : 'Set Deadline'}
+        </button>
+      ),
+    });
+  }
+
+  // Send to Daily Quest (for both tasks and projects)
+  if (!isArchived && onSendToDailyQuest) {
+    menuSections.push({
+      key: 'dailyquest',
+      content: (
+        <button
+          className="w-full px-3 py-1.5 text-xs text-left text-foreground hover:bg-secondary hover:text-primary transition-all font-medium flex items-center gap-2"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSendToDailyQuest(node.id);
+          }}
+        >
+          <Send className="w-3 h-3" />
+          Send to Daily Quest
         </button>
       ),
     });
@@ -1102,7 +1126,7 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
           </div>
         )}
 
-        {!node.is_task && deadlineLabel && (
+        {deadlineLabel && (
           <span className="text-[11px] text-muted-foreground whitespace-nowrap">
             {deadlineLabel}
           </span>
@@ -1262,6 +1286,7 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
                       expandedNodes={expandedNodes}
                       toggleNodeExpansion={toggleNodeExpansion}
                       onSetDeadline={onSetDeadline}
+                      onSendToDailyQuest={onSendToDailyQuest}
                       allNodes={allNodes}
                     />
                   ))}
@@ -1295,6 +1320,7 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
                 expandedNodes={expandedNodes}
                 toggleNodeExpansion={toggleNodeExpansion}
                 onSetDeadline={onSetDeadline}
+                onSendToDailyQuest={onSendToDailyQuest}
                 allNodes={allNodes}
               />
             ))
@@ -1323,6 +1349,7 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
                   expandedNodes={expandedNodes}
                   toggleNodeExpansion={toggleNodeExpansion}
                   onSetDeadline={onSetDeadline}
+                  onSendToDailyQuest={onSendToDailyQuest}
                   allNodes={allNodes}
                 />
               ))}

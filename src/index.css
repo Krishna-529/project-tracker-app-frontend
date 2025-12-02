@@ -8,41 +8,41 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    /* ===== LIGHT MODE: "Linear + Notion Inspired" ===== */
+    /* ===== LIGHT MODE: "Professional Calm" ===== */
     
-    /* Base surfaces - Background (#F7F9FC) */
-    --background: 210 50% 98%;
-    --foreground: 217 33% 17%; /* Text Main (#1F2937) */
+    /* Base surfaces - Background (#F3F5F6) */
+    --background: 200 14% 96%;
+    --foreground: 207 18% 13%; /* Text (#1A1F24) */
     
-    /* Card/Surface - Sidebar BG (#EFF2F7) */
-    --card: 216 33% 97%;
-    --card-foreground: 217 33% 17%;
+    /* Card/Surface - Pure White (#FFFFFF) */
+    --card: 0 0% 100%;
+    --card-foreground: 207 18% 13%;
     
     /* Popover */
-    --popover: 210 50% 98%;
-    --popover-foreground: 217 33% 17%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 207 18% 13%;
     
-    /* Primary - Muted Deep Blue (#3A5A98) */
-    --primary: 213 47% 42%;
+    /* Primary - Desaturated Indigo (#4B5D67) */
+    --primary: 200 17% 35%;
     --primary-foreground: 0 0% 100%;
     
-    /* Secondary surfaces - Primary Light (#DCE6F4) */
-    --secondary: 213 56% 88%;
-    --secondary-foreground: 217 33% 17%;
+    /* Secondary surfaces - Light neutral */
+    --secondary: 200 14% 92%;
+    --secondary-foreground: 207 18% 13%;
     
-    /* Muted text and surfaces */
-    --muted: 216 33% 97%;
-    --muted-foreground: 217 20% 45%;
+    /* Muted text and surfaces - Sidebar (#EBEEF0) */
+    --muted: 200 14% 93%;
+    --muted-foreground: 200 8% 45%;
     
-    /* Accent - Gentle Highlight (#6AA1D8) */
-    --accent: 207 57% 63%;
+    /* Accent - Teal (#4DA6A6) */
+    --accent: 180 37% 48%;
     --accent-foreground: 0 0% 100%;
     
-    /* Success - Emerald (#10b981) */
+    /* Success - Emerald */
     --success: 160 84% 39%;
     --success-foreground: 0 0% 100%;
     
-    /* Warning - Amber (#f59e0b) */
+    /* Warning - Amber */
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
     
@@ -50,42 +50,42 @@ All colors MUST be HSL.
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
     
-    /* Borders/Lines (#E2E8F0) */
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 213 47% 42%; /* Primary */
+    /* Borders/Lines - Subtle */
+    --border: 200 12% 88%;
+    --input: 200 12% 88%;
+    --ring: 180 37% 48%; /* Accent */
     
     /* Radius */
     --radius: 0.5rem;
     
     /* Tree guide lines */
-    --guide-line: 214 32% 91%;
+    --guide-line: 200 12% 88%;
     
     /* Hover states */
-    --hover-surface: 213 56% 92%;
+    --hover-surface: 200 14% 94%;
     
     /* Active/Focus glow */
-    --glow: 213 47% 42%;
+    --glow: 180 37% 48%;
 
-    /* Tag badge - Primary Light tint */
-    --tag-bg: 213 56% 88%;
-    --tag-fg: 213 47% 42%;
+    /* Tag badge */
+    --tag-bg: 180 37% 93%;
+    --tag-fg: 180 37% 38%;
 
     /* Notebook-style explorer tokens */
-    --separator: 214 32% 91%;
-    --hover-bg: 213 56% 92%;
-    --selected-border: 213 47% 42%;
-    --text-secondary: 217 20% 45%;
+    --separator: 200 12% 88%;
+    --hover-bg: 200 14% 94%;
+    --selected-border: 180 37% 48%;
+    --text-secondary: 200 8% 45%;
 
-    /* Sidebar palette */
-    --sidebar-background: 216 33% 97%;
-    --sidebar-foreground: 217 33% 17%;
-    --sidebar-primary: 213 47% 42%;
+    /* Sidebar palette - Sidebar (#EBEEF0) */
+    --sidebar-background: 200 14% 93%;
+    --sidebar-foreground: 207 18% 13%;
+    --sidebar-primary: 200 17% 35%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 213 56% 88%;
-    --sidebar-accent-foreground: 217 33% 17%;
-    --sidebar-border: 214 32% 91%;
-    --sidebar-ring: 213 47% 42%;
+    --sidebar-accent: 180 37% 93%;
+    --sidebar-accent-foreground: 207 18% 13%;
+    --sidebar-border: 200 12% 88%;
+    --sidebar-ring: 180 37% 48%;
 
     /* Motion tokens */
     --transition-fast: 80ms;

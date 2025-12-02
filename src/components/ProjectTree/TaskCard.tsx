@@ -103,11 +103,34 @@ export const TaskCard = ({ node, onClose, depth }: TaskCardProps) => {
           <label className="text-xs text-muted-foreground uppercase tracking-wide mb-1 block">
             Deadline
           </label>
-          <div className="flex items-center gap-2 px-3 py-2 bg-muted/50 border border-border rounded-md">
-            <Calendar className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm text-foreground">
-              {node.deadline ? format(new Date(node.deadline), 'PPP') : 'No deadline'}
-            </span>
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Calendar className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="date"
+                value={node.deadline ? format(new Date(node.deadline), 'yyyy-MM-dd') : ''}
+                onChange={(e) => {
+                  // TODO: Trigger mutation to update deadline
+                  console.log('Deadline changed:', e.target.value);
+                }}
+                className={cn(
+                  'w-full pl-10 pr-3 py-2 bg-muted/50 border border-border rounded-md',
+                  'text-sm text-foreground',
+                  'focus:outline-none focus:ring-2 focus:ring-primary/20'
+                )}
+              />
+            </div>
+            {node.deadline && (
+              <button
+                onClick={() => {
+                  // TODO: Clear deadline
+                  console.log('Clear deadline');
+                }}
+                className="px-3 py-2 text-xs text-muted-foreground hover:text-foreground bg-muted hover:bg-muted/80 rounded-md transition-colors"
+              >
+                Clear
+              </button>
+            )}
           </div>
         </div>
 

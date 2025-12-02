@@ -175,6 +175,33 @@ const Index = () => {
     [refreshTree],
   );
 
+  const handleSendToDailyQuest = useCallback(
+    async (nodeId: number) => {
+      try {
+        console.log('[Frontend] Sending task to Daily Quest:', nodeId);
+        const response = await fetch(`http://localhost:3000/api/v1/integrations/daily-quest/${nodeId}`, {
+          method: 'POST',
+          credentials: 'include',
+        });
+        
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ message: 'Failed to send task' }));
+          throw new Error(error.message || 'Failed to send task');
+        }
+        
+        const result = await response.json();
+        console.log('[Frontend] Daily Quest response:', result);
+        toast.success(`Task ${result.message || 'sent to Daily Quest'}`);
+      } catch (err) {
+        console.error('[Frontend] Failed to send to Daily Quest:', err);
+        toast.error('Failed to send to Daily Quest', {
+          description: err instanceof Error ? err.message : undefined,
+        });
+      }
+    },
+    [],
+  );
+
   const handleReorder = useCallback(
     async (parentId: number | null, orderedIds: number[]) => {
       if (orderedIds.length === 0) {
@@ -417,6 +444,27 @@ const Index = () => {
             </button>
 
             <button
+              onClick={async () => {
+                try {
+                  await fetch('http://localhost:3000/api/v1/auth/logout', {
+                    method: 'POST',
+                    credentials: 'include',
+                  });
+                  window.location.href = '/login';
+                } catch (error) {
+                  toast.error('Failed to logout');
+                }
+              }}
+              className={cn(
+                'px-3 py-1.5 text-sm font-medium',
+                'text-destructive hover:text-destructive/80 hover:bg-destructive/10',
+                'rounded-md transition-all scale-press border border-transparent hover:border-destructive/30',
+              )}
+            >
+              Logout
+            </button>
+
+            <button
               className={cn(
                 'px-3 py-1.5 text-sm font-medium',
                 'text-foreground bg-secondary/50 hover:bg-secondary',
@@ -427,19 +475,6 @@ const Index = () => {
             >
               <LayoutGrid className="w-4 h-4" />
               Views
-            </button>
-
-            <button
-              onClick={handleCreateTaskClick}
-              className={cn(
-                'px-3 py-1.5 text-sm font-medium',
-                'text-primary-foreground bg-primary hover:bg-primary/90',
-                'rounded-md transition-colors scale-press',
-                'flex items-center gap-2',
-              )}
-            >
-              <Plus className="w-4 h-4" />
-              New Task
             </button>
           </div>
         </div>
@@ -465,6 +500,7 @@ const Index = () => {
               onReorder={handleReorder}
               onMove={handleMove}
               onSetDeadline={handleSetDeadline}
+              onSendToDailyQuest={handleSendToDailyQuest}
               onSelectAll={openedProjectId != null ? handleCloseProject : handleResetScope}
               isAllSelected={activeProjectId == null && openedProjectId == null}
               openedProjectName={openedProjectName}

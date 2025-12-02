@@ -64,7 +64,9 @@ interface NodeDetailResponse {
 }
 
 export const fetchNodeById = async (id: number) => {
-  const response = await fetch(`${API_BASE_URL}/nodes/${id}`);
+  const response = await fetch(`${API_BASE_URL}/nodes/${id}`, {
+    credentials: 'include',
+  });
 
   if (!response.ok) {
     throw new Error(`Failed to load node ${id}: ${response.statusText}`);
@@ -86,6 +88,7 @@ export const createNode = async (payload: CreateNodeRequest) => {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
+    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -108,6 +111,7 @@ export const updateNode = async (id: number, payload: UpdateNodeRequest) => {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
+    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -128,6 +132,7 @@ export const moveNode = async (payload: MoveNodeRequest) => {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
+    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -149,6 +154,7 @@ export const reorderNodes = async (payload: ReorderNodesRequest) => {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
+    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -161,6 +167,7 @@ export const reorderNodes = async (payload: ReorderNodesRequest) => {
 export const deleteNode = async (nodeId: number) => {
   const response = await fetch(`${API_BASE_URL}/nodes/${nodeId}`, {
     method: 'DELETE',
+    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -169,3 +176,46 @@ export const deleteNode = async (nodeId: number) => {
 
   return response.json();
 };
+
+export const sendToDailyQuest = async (nodeId: number) => {
+  const response = await fetch(`${API_BASE_URL}/integrations/daily-quest/${nodeId}`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to send to Daily Quest: ${response.statusText}`);
+  }
+
+  return response.json();
+};
+
+export const getGoogleAuthUrl = async () => {
+  const response = await fetch(`${API_BASE_URL}/auth/google/url`, {
+    credentials: 'include',
+  });
+  if (!response.ok) throw new Error('Failed to get Google Auth URL');
+  return response.json();
+};
+
+export const logout = async () => {
+  const response = await fetch(`${API_BASE_URL}/auth/logout`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (!response.ok) throw new Error('Failed to logout');
+  return response.json();
+};
+
+export const getMe = async () => {
+  const response = await fetch(`${API_BASE_URL}/auth/me`, {
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    if (response.status === 401) return null;
+    throw new Error('Failed to get user info');
+  }
+  const data = await response.json();
+  return data.data.user;
+};
+
