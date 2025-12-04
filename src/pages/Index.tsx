@@ -3,8 +3,14 @@ import { LayoutGrid, PanelLeft, PanelLeftClose, Plus, RefreshCw, Search, Externa
 import { toast } from 'sonner';
 
 import { TreeContainer } from '@/components/ProjectTree/TreeContainer';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuPortal } from '@/components/ui/dropdown-menu';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SidebarTree } from '@/components/SidebarTree';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { ProjectOverviewHeader } from '@/components/ProjectOverviewHeader';
+import { SearchBar, type SearchFilters } from '@/components/SearchBar';
+import { ViewsDropdown, type ViewMode } from '@/components/ViewsDropdown';
+import { useKeyboardShortcuts, KeyboardShortcutsHelp } from '@/hooks/use-keyboard-shortcuts';
 import { fetchNodeTree, createNode, updateNode, reorderNodes as reorderNodesApi, moveNode as moveNodeApi, deleteNode } from '@/lib/api';
 import { buildNodeTree } from '@/lib/nodeTree';
 import { cn } from '@/lib/utils';
@@ -17,11 +23,24 @@ const loadTree = async () => {
   return buildNodeTree(nodes);
 };
 
-function filterNodes(nodes: Node[], query: string) {
+function filterNodes(nodes: Node[], query: string, filters: SearchFilters = {}) {
   const normalizedQuery = query.toLowerCase();
 
   const visit = (node: Node): Node | null => {
-    const matches = node.name.toLowerCase().includes(normalizedQuery);
+    // Text match
+    const textMatches = !query || node.name.toLowerCase().includes(normalizedQuery);
+    
+    // Status filter
+    const statusMatches = !filters.status || node.status === filters.status;
+    
+    // Deadline filter
+    let deadlineMatches = true;
+    if (filters.hasDeadline !== undefined) {
+      deadlineMatches = filters.hasDeadline ? !!node.deadline : !node.deadline;
+    }
+    
+    const nodeMatches = textMatches && statusMatches && deadlineMatches;
+    
     let children: Node[] | undefined;
 
     if (node.children && node.children.length > 0) {
@@ -29,14 +48,14 @@ function filterNodes(nodes: Node[], query: string) {
         .map(visit)
         .filter((child): child is Node => Boolean(child));
 
-      if (matches) {
+      if (nodeMatches) {
         children = node.children;
       } else if (filteredChildren.length > 0) {
         children = filteredChildren;
       }
     }
 
-    if (matches || children) {
+    if (nodeMatches || children) {
       return {
         ...node,
         children,
@@ -51,16 +70,71 @@ function filterNodes(nodes: Node[], query: string) {
 
 const Index = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [isExplorerOpen, setIsExplorerOpen] = useState(true);
+  const [searchFilters, setSearchFilters] = useState<SearchFilters>({});
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [isExplorerOpen, setIsExplorerOpen] = useState<boolean>(() => {
+    try {
+      const saved = window.localStorage.getItem('ui:isExplorerOpen');
+      if (saved === 'true') return true;
+      if (saved === 'false') return false;
+    } catch {}
+    return false;
+  });
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('ui:isExplorerOpen', String(isExplorerOpen));
+    } catch {}
+  }, [isExplorerOpen]);
   const [rootNodes, setRootNodes] = useState<Node[]>([]);
   const [nodeMap, setNodeMap] = useState<Map<number, Node>>(new Map());
   const [selection, setSelection] = useState<SelectionType | null>(null);
   const [activeProjectId, setActiveProjectId] = useState<number | null>(null);
-  const [openedProjectId, setOpenedProjectId] = useState<number | null>(null);
+  const [openedProjectId, setOpenedProjectId] = useState<number | null>(() => {
+    try {
+      const saved = window.localStorage.getItem('ui:openedProjectId');
+      if (saved) return Number(saved) || null;
+    } catch {}
+    return null;
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pendingReordersRef = useRef(0);
   const [pendingReorderCount, setPendingReorderCount] = useState(0);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  // Hover-only menu (no click-to-open)
+  const [showAddTaskInput, setShowAddTaskInput] = useState(false);
+  const [newTaskName, setNewTaskName] = useState('');
+  const addTaskInputRef = useRef<HTMLInputElement>(null);
+  const [showAddProjectInput, setShowAddProjectInput] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const addProjectInputRef = useRef<HTMLInputElement>(null);
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
+  const addMenuCloseTimerRef = useRef<number | null>(null);
+  // Notes editor in main content
+  const [showNotesEditor, setShowNotesEditor] = useState(false);
+  const [notesText, setNotesText] = useState('');
+  // Meta description modal
+  const [isMetaModalOpen, setIsMetaModalOpen] = useState(false);
+  const [metaDescription, setMetaDescription] = useState('');
+
+  const openAddMenu = useCallback(() => {
+    if (addMenuCloseTimerRef.current) {
+      window.clearTimeout(addMenuCloseTimerRef.current);
+      addMenuCloseTimerRef.current = null;
+    }
+    setIsAddMenuOpen(true);
+  }, []);
+
+  const scheduleCloseAddMenu = useCallback(() => {
+    if (addMenuCloseTimerRef.current) {
+      window.clearTimeout(addMenuCloseTimerRef.current);
+    }
+    addMenuCloseTimerRef.current = window.setTimeout(() => {
+      setIsAddMenuOpen(false);
+      addMenuCloseTimerRef.current = null;
+    }, 180);
+  }, []);
 
   const refreshTree = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
     if (!force && pendingReordersRef.current > 0) {
@@ -83,6 +157,26 @@ const Index = () => {
   useEffect(() => {
     void refreshTree();
   }, [refreshTree]);
+
+  // If there is a saved opened project, set the active project after nodes load
+  useEffect(() => {
+    if (openedProjectId != null) {
+      setActiveProjectId(openedProjectId);
+    }
+  }, [openedProjectId]);
+
+  // Sync notes text when target project changes
+  useEffect(() => {
+    const targetId = openedProjectId ?? activeProjectId;
+    if (targetId != null) {
+      const node = nodeMap.get(targetId);
+      setNotesText(node?.notes || '');
+      setMetaDescription(node?.meta_description || '');
+    } else {
+      setNotesText('');
+      setMetaDescription('');
+    }
+  }, [openedProjectId, activeProjectId, nodeMap]);
 
   const handleSelect = useCallback(
     (nodeId: number) => {
@@ -124,19 +218,21 @@ const Index = () => {
   const handleAddTask = useCallback(
     async (projectId: number, name?: string) => {
       try {
-        await createNode({
-          name: name || 'New Task',
+        const defaultName = name || 'New Task';
+        const result = await createNode({
+          name: defaultName,
           isTask: true,
           parentId: projectId,
           status: 'todo',
         });
-        toast.success('Task created');
         await refreshTree();
+        return result?.node?.id;
       } catch (err) {
         console.error(err);
         toast.error('Failed to create task', {
           description: err instanceof Error ? err.message : undefined,
         });
+        return undefined;
       }
     },
     [refreshTree],
@@ -174,6 +270,39 @@ const Index = () => {
     },
     [refreshTree],
   );
+
+  const handleSaveNotes = useCallback(async () => {
+    const targetId = openedProjectId ?? activeProjectId;
+    if (targetId == null) return;
+    try {
+      await updateNode(targetId, { notes: notesText });
+      toast.success('Notes saved');
+    } catch (err) {
+      toast.error('Failed to save notes', {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    } finally {
+      void refreshTree();
+    }
+  }, [openedProjectId, activeProjectId, notesText, refreshTree]);
+
+  const handleSaveMeta = useCallback(async () => {
+    if (openedProjectId == null) {
+      setIsMetaModalOpen(false);
+      return;
+    }
+    try {
+      await updateNode(openedProjectId, { meta_description: metaDescription });
+      toast.success('Description updated');
+      setIsMetaModalOpen(false);
+    } catch (err) {
+      toast.error('Failed to update description', {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    } finally {
+      void refreshTree();
+    }
+  }, [openedProjectId, metaDescription, refreshTree]);
 
   const handleSendToDailyQuest = useCallback(
     async (nodeId: number) => {
@@ -317,6 +446,9 @@ const Index = () => {
       setActiveProjectId(nodeId);
       setSelection({ id: nodeId, isTask: false });
       toast.success(`Opened: ${node.name}`);
+      try {
+        window.localStorage.setItem('ui:openedProjectId', String(nodeId));
+      } catch {}
     }
   }, [nodeMap]);
 
@@ -325,6 +457,9 @@ const Index = () => {
     setSelection(null);
     setActiveProjectId(null);
     toast.info('Closed project workspace');
+    try {
+      window.localStorage.removeItem('ui:openedProjectId');
+    } catch {}
   }, []);
 
   const handleResetScope = useCallback(() => {
@@ -333,30 +468,111 @@ const Index = () => {
   }, []);
 
   const handleCreateTaskClick = useCallback(() => {
-    if (activeProjectId != null) {
-      void handleAddTask(activeProjectId);
+    if (openedProjectId != null || activeProjectId != null) {
+      setShowAddTaskInput(true);
+      setNewTaskName('');
+      setTimeout(() => {
+        addTaskInputRef.current?.focus();
+      }, 50);
     } else {
-      toast.info('Select a project in the explorer first.');
+      toast.info('Open a project first to add tasks.');
     }
-  }, [activeProjectId, handleAddTask]);
+  }, [openedProjectId, activeProjectId]);
+
+  const handleSubmitNewTask = useCallback(async () => {
+    const taskName = newTaskName.trim();
+    if (!taskName) {
+      setShowAddTaskInput(false);
+      return;
+    }
+
+    const projectId = openedProjectId ?? activeProjectId;
+    if (projectId) {
+      const newTaskId = await handleAddTask(projectId, taskName);
+      if (newTaskId) {
+        setSelection({ id: newTaskId, isTask: true });
+      }
+    }
+    
+    setShowAddTaskInput(false);
+    setNewTaskName('');
+  }, [newTaskName, openedProjectId, activeProjectId, handleAddTask]);
+
+  const handleTaskInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      void handleSubmitNewTask();
+    } else if (e.key === 'Escape') {
+      setShowAddTaskInput(false);
+      setNewTaskName('');
+    }
+  }, [handleSubmitNewTask]);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts([
+    {
+      key: 'n',
+      modifiers: [],
+      action: handleCreateTaskClick,
+      description: 'Create new task in active project',
+    },
+    {
+      key: 'p',
+      modifiers: ['Shift'],
+      action: () => handleAddProject(),
+      description: 'Create new project',
+    },
+    {
+      key: 'Delete',
+      modifiers: [],
+      action: () => {
+        if (selection?.id) {
+          void handleDelete(selection.id);
+        }
+      },
+      description: 'Delete selected item',
+    },
+    {
+      key: 'f',
+      modifiers: ['Control'],
+      action: () => {
+        document.querySelector<HTMLInputElement>('input[type="text"]')?.focus();
+      },
+      description: 'Focus search',
+    },
+    {
+      key: '?',
+      modifiers: ['Shift'],
+      action: () => setShowShortcuts((prev) => !prev),
+      description: 'Toggle keyboard shortcuts help',
+    },
+  ]);
 
   const filteredNodes = useMemo(() => {
-    const baseNodes =
+    let baseNodes =
       activeProjectId != null
         ? nodeMap.get(activeProjectId)?.children ?? []
         : rootNodes;
 
-    if (!searchQuery.trim()) {
+    // Apply view mode filters
+    if (viewMode === 'completed') {
+      baseNodes = baseNodes.filter(node => node.status === 'done' || node.status === 'archived');
+    } else if (viewMode === 'pending') {
+      baseNodes = baseNodes.filter(node => node.status === 'todo' || node.status === 'in_progress');
+    }
+
+    if (!searchQuery.trim() && Object.keys(searchFilters).length === 0) {
       return baseNodes;
     }
 
-    return filterNodes(baseNodes, searchQuery);
-  }, [activeProjectId, nodeMap, rootNodes, searchQuery]);
+    return filterNodes(baseNodes, searchQuery, searchFilters);
+  }, [activeProjectId, nodeMap, rootNodes, searchQuery, searchFilters, viewMode]);
 
   const displayNodes = useMemo(() => {
     if (openedProjectId != null) {
       const openedNode = nodeMap.get(openedProjectId);
-      return openedNode ? [openedNode] : [];
+      // Show only the children of the opened project, not the project itself
+      return openedNode?.children ?? [];
     }
     return rootNodes;
   }, [openedProjectId, nodeMap, rootNodes]);
@@ -370,51 +586,61 @@ const Index = () => {
     ? nodeMap.get(openedProjectId)?.name ?? 'Project'
     : null;
 
+  // Breadcrumb path for the opened project (root -> ... -> current)
+  const breadcrumbPath = useMemo(() => {
+    if (openedProjectId == null) return [] as Node[];
+    const path: Node[] = [];
+    let cur: Node | undefined = nodeMap.get(openedProjectId);
+    let guard = 0;
+    while (cur && guard < 1000) {
+      path.push(cur);
+      if (cur.parent_id == null) break;
+      cur = nodeMap.get(cur.parent_id);
+      guard++;
+    }
+    return path.reverse();
+  }, [openedProjectId, nodeMap]);
+
   return (
-    <div className="h-screen bg-background flex flex-col overflow-hidden">
+    <div className="h-screen flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="flex-shrink-0 z-30 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 shadow-sm">
-        <div className="container mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+      <header className="navbar-container flex-shrink-0 z-50 h-16">
+        <div className="h-full px-6 flex items-center justify-between gap-4">
+          {/* Left: Logo + Title */}
+          <div className="flex items-center gap-3 min-w-[320px]">
             <button
               onClick={() => setIsExplorerOpen(!isExplorerOpen)}
               className={cn(
                 'p-2 text-muted-foreground hover:text-primary',
-                'hover:bg-secondary/50 border border-transparent hover:border-border',
-                'rounded-lg transition-all focus-ring',
+                'hover:bg-secondary/50 rounded-lg transition-all',
               )}
-              title={isExplorerOpen ? 'Close explorer' : 'Open explorer'}
+              title={isExplorerOpen ? 'Close sidebar' : 'Open sidebar'}
             >
               {isExplorerOpen ? (
-                <PanelLeftClose className="w-5 h-5" />
+                <PanelLeftClose className="w-4 h-4" />
               ) : (
-                <PanelLeft className="w-5 h-5" />
+                <PanelLeft className="w-4 h-4" />
               )}
             </button>
 
-            <h1 className="text-xl font-bold text-foreground">Project Tracker</h1>
-
-            {/* Search bar */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search projects and tasks..."
-                className={cn(
-                  'pl-10 pr-4 py-2 w-80',
-                  'bg-background border-2 border-border rounded-lg',
-                  'text-sm text-foreground placeholder:text-muted-foreground',
-                  'focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20',
-                  'transition-all hover:border-accent/50',
-                )}
-              />
+            <div className="app-logo text-lg">
+              K
             </div>
+
+            <h1 className="text-lg font-semibold text-foreground tracking-tight">Project Tracker</h1>
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-2">
+          {/* Center/Right: Search + Actions */}
+          <div className="flex items-center gap-3 ml-auto">
+            {/* Enhanced Search bar */}
+            <SearchBar
+              value={searchQuery}
+              onChange={setSearchQuery}
+              filters={searchFilters}
+              onFiltersChange={setSearchFilters}
+            />
+
+            {/* Actions */}
             {(loading || pendingReorderCount > 0) && (
               <span className="text-xs text-muted-foreground">
                 {pendingReorderCount > 0 ? 'Reordering…' : 'Syncing…'}
@@ -456,25 +682,27 @@ const Index = () => {
                 }
               }}
               className={cn(
-                'px-3 py-1.5 text-sm font-medium',
-                'text-destructive hover:text-destructive/80 hover:bg-destructive/10',
-                'rounded-md transition-all scale-press border border-transparent hover:border-destructive/30',
+                'px-4 py-1.5 text-sm font-medium',
+                'text-destructive hover:text-destructive/80',
+                'bg-destructive/5 hover:bg-destructive/10',
+                'rounded-full transition-all',
+                'border border-destructive/20 hover:border-destructive/30',
               )}
             >
               Logout
             </button>
 
+            <ViewsDropdown currentView={viewMode} onViewChange={setViewMode} />
+
             <button
+              onClick={() => setShowShortcuts(true)}
               className={cn(
-                'px-3 py-1.5 text-sm font-medium',
-                'text-foreground bg-secondary/50 hover:bg-secondary',
-                'border border-border hover:border-accent/30',
-                'rounded-md transition-all scale-press',
-                'flex items-center gap-2',
+                'p-1.5 text-muted-foreground hover:text-accent hover:bg-secondary/50',
+                'rounded-md transition-all border border-transparent hover:border-accent/30',
               )}
+              title="Keyboard shortcuts (Shift+?)"
             >
-              <LayoutGrid className="w-4 h-4" />
-              Views
+              <span className="text-xs font-bold">?</span>
             </button>
           </div>
         </div>
@@ -484,87 +712,327 @@ const Index = () => {
       <div className="flex-1 flex overflow-hidden">
         {/* Left Explorer Panel */}
         {isExplorerOpen && (
-          <aside className="w-72 bg-card border-r border-border flex flex-col overflow-hidden">
-            <SidebarTree
-              nodes={displayNodes}
-              allProjects={rootNodes}
-              selectedId={selection?.id ?? null}
-              onSelect={handleSelect}
-              onAddProject={handleAddProject}
-              onAddTask={handleAddTask}
-              onRename={handleRename}
-              onArchive={handleArchive}
-              onDelete={handleDelete}
-              onOpenProject={handleOpenProject}
-              onCloseProject={handleCloseProject}
-              onReorder={handleReorder}
-              onMove={handleMove}
-              onSetDeadline={handleSetDeadline}
-              onSendToDailyQuest={handleSendToDailyQuest}
-              onSelectAll={openedProjectId != null ? handleCloseProject : handleResetScope}
-              isAllSelected={activeProjectId == null && openedProjectId == null}
-              openedProjectName={openedProjectName}
-            />
+          <aside className="sidebar-container w-80 border-r border-border/60 flex flex-col overflow-hidden">
+            {/* Project Overview Header in Sidebar */}
+            {activeProjectId != null && nodeMap.get(activeProjectId) && (
+              <div className="p-4 border-b border-border/60">
+                <ProjectOverviewHeader
+                  project={nodeMap.get(activeProjectId)!}
+                  allTasks={filteredNodes.filter(n => n.is_task)}
+                  onRename={() => {
+                    const newName = prompt('Enter new name:', nodeMap.get(activeProjectId)?.name);
+                    if (newName) handleRename(activeProjectId, newName);
+                  }}
+                  onArchive={() => handleArchive(activeProjectId, true)}
+                  onDelete={() => handleDelete(activeProjectId)}
+                  onNotesChange={(notes) => {
+                    void updateNode(activeProjectId, { notes });
+                    void refreshTree();
+                  }}
+                />
+              </div>
+            )}
+            
+            {/* Sidebar tree removed per request; sidebar now shows only overview header */}
           </aside>
         )}
 
-        {/* Right Content Panel */}
-        <main className="flex-1 overflow-y-auto">
-          <div className="container mx-auto px-4 py-8">
-            <div className="max-w-5xl mx-auto">
-              {/* Breadcrumb */}
+        {/* Right Content Panel - Full Height Project/Task View */}
+        <main className="main-content flex-1 overflow-hidden flex flex-col relative">
+          <div className="flex-1 overflow-y-auto">
+            <div className="h-full px-9 py-7">
+              {/* Breadcrumb + Actions in main content */}
               <div className="mb-4">
-                <h2 className="text-2xl font-bold text-foreground">{selectedProjectName}</h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-bold text-primary tracking-wide">
+                    <div className="flex flex-wrap items-center gap-1.5 w-full">
+                    {(() => {
+                      const segments: { id: number | null; name: string }[] = [];
+                      segments.push({ id: null, name: 'All Projects' });
+                      if (openedProjectId != null) {
+                        if (breadcrumbPath.length > 0) {
+                          for (const n of breadcrumbPath) segments.push({ id: n.id, name: n.name });
+                        } else if (openedProjectName) {
+                          segments.push({ id: openedProjectId, name: openedProjectName });
+                        }
+                      }
+                      return segments.map((seg, idx) => {
+                        const isLast = idx === segments.length - 1;
+                        const clickable = seg.id === null ? openedProjectId != null : !isLast;
+                        return (
+                          <span key={seg.id ?? 'root'} className="inline-flex items-center">
+                            {idx > 0 && <span className="px-1 text-primary/50">/</span>}
+                            {clickable ? (
+                              <button
+                                className={cn(
+                                  isLast ? 'whitespace-normal break-words' : 'truncate max-w-[220px]',
+                                  'text-left hover:text-accent underline-offset-2 hover:underline'
+                                )}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (seg.id === null) {
+                                    handleCloseProject();
+                                  } else {
+                                    handleOpenProject(seg.id);
+                                  }
+                                }}
+                                title={seg.name}
+                              >
+                                {seg.name}
+                              </button>
+                            ) : (
+                              <span className={cn(isLast ? 'whitespace-normal break-words' : 'truncate max-w-[220px]')} title={seg.name}>
+                                {seg.name}
+                              </span>
+                            )}
+                          </span>
+                        );
+                      });
+                    })()}
+                    </div>
+                  </h2>
+
+                  {/* Top-right meta description icon (green area) */}
+                  {openedProjectId != null && (
+                    <button
+                      onClick={() => setIsMetaModalOpen(true)}
+                      className="p-2 rounded-md border border-border/60 hover:border-border bg-card hover:bg-accent/5 text-muted-foreground hover:text-foreground"
+                      title="Edit description"
+                      aria-label="Edit description"
+                    >
+                      {/* document icon */}
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <path d="M14 2v6h6"/>
+                        <path d="M16 13H8"/>
+                        <path d="M16 17H8"/>
+                      </svg>
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {/* Tree view */}
-              <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
-                <TreeContainer nodes={filteredNodes} />
+              <div className="h-full border-l border-border/40">
+                {/* Project/Task Tree - Full Height */}
+                <SidebarTree
+                  nodes={displayNodes}
+                  allProjects={rootNodes}
+                  selectedId={selection?.id ?? null}
+                  onSelect={handleSelect}
+                  onAddProject={handleAddProject}
+                  onAddTask={handleAddTask}
+                  onRename={handleRename}
+                  onArchive={handleArchive}
+                  onDelete={handleDelete}
+                  onOpenProject={handleOpenProject}
+                  onCloseProject={handleCloseProject}
+                  onReorder={handleReorder}
+                  onMove={handleMove}
+                  onSetDeadline={handleSetDeadline}
+                  onSendToDailyQuest={handleSendToDailyQuest}
+                  onUpdateNotes={async (nodeId, notes) => {
+                    try {
+                      await updateNode(nodeId, { notes });
+                      toast.success('Notes saved');
+                    } catch (err) {
+                      toast.error('Failed to save notes', {
+                        description: err instanceof Error ? err.message : undefined,
+                      });
+                    } finally {
+                      void refreshTree();
+                    }
+                  }}
+                  onSelectAll={openedProjectId != null ? handleCloseProject : handleResetScope}
+                  isAllSelected={activeProjectId == null && openedProjectId == null}
+                  openedProjectName={openedProjectName}
+                  openedProjectId={openedProjectId}
+                  hideBottomButton={true}
+                />
               </div>
+            </div>
+          </div>
 
-              {/* Empty state */}
-              {filteredNodes.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-32 text-center">
-                  <div className="w-20 h-20 rounded-2xl bg-secondary flex items-center justify-center mb-6 border-2 border-primary/30 shadow-sm">
-                    <LayoutGrid className="w-10 h-10 text-primary" />
+          {/* Add Task Button - Full Width at Bottom */}
+          <div className="absolute bottom-0 left-0 right-0 border-t border-border/60 bg-card/50 backdrop-blur-sm overflow-visible">
+            <div className="px-9 py-4">
+              {/* Notes editor removed from footer per request */}
+              {showAddTaskInput ? (
+                <div className="flex items-center gap-2">
+                  <Plus className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                  <input
+                    ref={addTaskInputRef}
+                    type="text"
+                    value={newTaskName}
+                    onChange={(e) => setNewTaskName(e.target.value)}
+                    onKeyDown={handleTaskInputKeyDown}
+                    onBlur={() => {
+                      if (newTaskName.trim()) {
+                        void handleSubmitNewTask();
+                      } else {
+                        setShowAddTaskInput(false);
+                      }
+                    }}
+                    placeholder="Enter task name..."
+                    className={cn(
+                      'flex-1 text-sm bg-background border border-primary/50 rounded-lg px-4 py-3',
+                      'focus:outline-none focus:border-primary transition-colors',
+                      'placeholder:text-muted-foreground/50'
+                    )}
+                  />
+                </div>
+              ) : (
+                <div className="relative flex items-center gap-2">
+                  <div
+                    className="relative"
+                    onMouseEnter={openAddMenu}
+                    onMouseLeave={scheduleCloseAddMenu}
+                  >
+                    <button
+                      type="button"
+                      aria-label="Add options"
+                      className="p-2 rounded-md border border-border/60 hover:border-border bg-card hover:bg-accent/5 text-muted-foreground hover:text-foreground"
+                    >
+                      <Plus className="w-5 h-5" />
+                    </button>
+                    {/* Hover dropup controlled via timers; positioned right/up */}
+                    {isAddMenuOpen && (
+                      <div
+                        className="absolute left-full top-0 -translate-y-full ml-2 z-[1000]"
+                        onMouseEnter={openAddMenu}
+                        onMouseLeave={scheduleCloseAddMenu}
+                      >
+                        <div className="bg-popover border border-border rounded-lg shadow-lg py-1 min-w-[160px]">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowAddProjectInput(true);
+                              setIsAddMenuOpen(false);
+                              setTimeout(() => addProjectInputRef.current?.focus(), 30);
+                            }}
+                            className="w-full px-3 py-1.5 text-left text-xs hover:bg-accent/10 transition-colors flex items-center gap-2 cursor-pointer"
+                          >
+                            <Plus className="w-3 h-3" />
+                            Add Project
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <h2 className="text-2xl font-bold text-foreground mb-2">No items yet</h2>
-                  <p className="text-muted-foreground mb-8 max-w-md text-base">
-                    Start organizing your work by creating your first project or task.
-                  </p>
-                  <div className="flex gap-3">
+
+                  {showAddProjectInput ? (
+                    <div className="flex-1 flex items-center gap-2">
+                      <Plus className="w-4 h-4 text-muted-foreground" />
+                      <input
+                        ref={addProjectInputRef}
+                        type="text"
+                        value={newProjectName}
+                        onChange={(e) => setNewProjectName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const name = newProjectName.trim();
+                            if (name) {
+                              const parentId = openedProjectId ?? activeProjectId ?? undefined;
+                              void handleAddProject(parentId, name);
+                            }
+                            setShowAddProjectInput(false);
+                            setNewProjectName('');
+                          } else if (e.key === 'Escape') {
+                            setShowAddProjectInput(false);
+                            setNewProjectName('');
+                          }
+                        }}
+                        onBlur={() => {
+                          const name = newProjectName.trim();
+                          if (name) {
+                            const parentId = openedProjectId ?? activeProjectId ?? undefined;
+                            void handleAddProject(parentId, name);
+                          }
+                          setShowAddProjectInput(false);
+                          setNewProjectName('');
+                        }}
+                        placeholder="Enter project name..."
+                        className={cn(
+                          'flex-1 text-sm bg-background border border-primary/50 rounded-lg px-4 py-3',
+                          'focus:outline-none focus:border-primary transition-colors',
+                          'placeholder:text-muted-foreground/50'
+                        )}
+                      />
+                    </div>
+                  ) : (
                     <button
                       onClick={handleCreateTaskClick}
                       className={cn(
-                        'px-6 py-3 text-sm font-semibold',
-                        'text-primary-foreground bg-primary hover:bg-primary/90',
-                        'rounded-lg transition-all btn-lift focus-ring',
-                        'flex items-center gap-2 shadow-md',
+                        'flex-1 flex items-center gap-2 px-4 py-3 rounded-lg',
+                        'bg-card text-muted-foreground hover:text-foreground',
+                        'hover:bg-accent/5 transition-all',
+                        'border border-border/60 hover:border-border',
                       )}
                     >
-                      <Plus className="w-5 h-5" />
-                      Create Task
+                      <span className="font-medium">Add Task</span>
                     </button>
-                    <button
-                      onClick={() => handleAddProject()}
-                      className={cn(
-                        'px-6 py-3 text-sm font-semibold',
-                        'text-primary bg-secondary hover:bg-secondary/80',
-                        'border-2 border-primary/20 hover:border-primary',
-                        'rounded-lg transition-all btn-lift focus-ring',
-                        'flex items-center gap-2 shadow-sm',
-                      )}
-                    >
-                      <Plus className="w-5 h-5" />
-                      Create Project
-                    </button>
-                  </div>
+                  )}
                 </div>
               )}
             </div>
           </div>
         </main>
       </div>
+
+      {/* Meta Description Modal */}
+      <Dialog open={isMetaModalOpen} onOpenChange={setIsMetaModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Project Description</DialogTitle>
+            <DialogDescription>
+              Update the meta description for the opened project.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <textarea
+              value={metaDescription}
+              onChange={(e) => setMetaDescription(e.target.value)}
+              className="w-full min-h-[140px] px-3 py-2 rounded-md border border-border bg-background text-sm"
+              placeholder="Enter description..."
+            />
+          </div>
+          <DialogFooter className="sm:justify-between">
+            <DialogClose asChild>
+              <button className={cn('px-3 py-1.5 rounded-md bg-secondary text-foreground')}>Cancel</button>
+            </DialogClose>
+            <button
+              onClick={() => { void handleSaveMeta(); }}
+              className={cn('px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90')}
+            >
+              Save
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Keyboard Shortcuts Help Dialog */}
+      {showShortcuts && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-fadeIn"
+          onClick={() => setShowShortcuts(false)}
+        >
+          <div
+            className="bg-card p-6 rounded-lg shadow-2xl max-w-md w-full mx-4 animate-slideDown"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Keyboard Shortcuts</h3>
+              <button
+                onClick={() => setShowShortcuts(false)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                ✕
+              </button>
+            </div>
+            <KeyboardShortcutsHelp />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -10,9 +10,15 @@ All colors MUST be HSL.
   :root {
     /* ===== LIGHT MODE: "Professional Calm" ===== */
     
-    /* Base surfaces - Background (#F3F5F6) */
+    /* Base surfaces - Background (#F3F5F6) - Main content area */
     --background: 200 14% 96%;
     --foreground: 207 18% 13%; /* Text (#1A1F24) */
+    
+    /* Navbar - Slightly different from main (#F7F9FC) */
+    --navbar: 200 20% 98%;
+    
+    /* Sidebar - Slightly darker than main (#EAF1F7) */
+    --sidebar: 200 20% 94%;
     
     /* Card/Surface - Pure White (#FFFFFF) */
     --card: 0 0% 100%;
@@ -248,5 +254,125 @@ All colors MUST be HSL.
   /* Focus visible ring */
   .focus-ring {
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+  }
+
+  /* Fade-in animation */
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Slide-down animation */
+  .animate-slide-down {
+    animation: slideDown 0.2s ease-out;
+  }
+
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Checkbox animation */
+  .checkbox-animation {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .checkbox-animation:checked {
+    animation: checkboxPop 0.2s ease-out;
+  }
+
+  @keyframes checkboxPop {
+    0% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.2);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  /* Row guideline for task area */
+  .task-row-guideline {
+    position: relative;
+  }
+
+  .task-row-guideline::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: hsl(var(--border) / 0.3);
+  }
+
+  /* Border color transition */
+  .border-transition {
+    transition: border-color 0.15s ease-in-out;
+  }
+
+  /* Smooth color transition */
+  .color-transition {
+    transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out;
+  }
+
+  /* Navbar styling */
+  .navbar-container {
+    background: hsl(var(--navbar));
+    border-bottom: 1px solid hsl(var(--border) / 0.6);
+    box-shadow: 0 2px 6px rgba(16, 24, 40, 0.04);
+  }
+
+  /* Sidebar styling */
+  .sidebar-container {
+    background: hsl(var(--sidebar));
+  }
+
+  /* Main content styling */
+  .main-content {
+    background: hsl(var(--background));
+  }
+
+  /* Sidebar active item */
+  .sidebar-item-active {
+    background: hsl(var(--primary) / 0.08);
+    border-left: 3px solid hsl(var(--primary));
+  }
+
+  /* Sidebar hover */
+  .sidebar-item-hover:hover {
+    background: hsl(var(--primary) / 0.04);
+  }
+
+  /* Logo container */
+  .app-logo {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: hsl(var(--card));
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    font-weight: 600;
+    color: hsl(var(--primary));
   }
 }

@@ -40,7 +40,7 @@ export const NodeRow = ({ node, depth }: NodeRowProps) => {
   };
 
   const handleRowClick = () => {
-    if (node.is_task) {
+    if (node.is_task && (!node.children || node.children.length === 0)) {
       setIsEditMode(!isEditMode);
     } else {
       setIsExpanded(!isExpanded);
@@ -56,7 +56,7 @@ export const NodeRow = ({ node, depth }: NodeRowProps) => {
         layout="position"
         initial={false}
         className={cn(
-          'relative group cursor-pointer hover-surface',
+          'relative group cursor-pointer hover-surface task-row-guideline',
           isEditMode && 'z-20'
         )}
         onClick={handleRowClick}
@@ -100,12 +100,20 @@ export const NodeRow = ({ node, depth }: NodeRowProps) => {
             </div>
           ) : (
             <div className="flex items-center gap-1 flex-shrink-0">
+              {node.children && node.children.length > 0 && (
+                <motion.div
+                  animate={{ rotate: isExpanded ? 90 : 0 }}
+                  transition={springConfig}
+                >
+                  <ChevronRight className="w-3 h-3 text-muted-foreground" />
+                </motion.div>
+              )}
               <button
                 onClick={handleCheckboxToggle}
                 className="scale-press"
               >
                 {isCompleted ? (
-                  <CheckCircle2 className="w-4 h-4 text-primary" />
+                  <CheckCircle2 className="w-4 h-4 text-primary animate-checkboxPop" />
                 ) : (
                   <Circle className="w-4 h-4 text-muted-foreground" />
                 )}
@@ -124,6 +132,14 @@ export const NodeRow = ({ node, depth }: NodeRowProps) => {
           >
             {node.name}
           </span>
+
+          {/* Subtasks indicator for tasks with children */}
+          {node.is_task && node.children && node.children.length > 0 && (
+            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-accent/10 text-accent rounded-full text-xs font-medium">
+              <span className="text-[10px]">📋</span>
+              <span>{node.children.filter(c => c.status === 'done').length}/{node.children.length}</span>
+            </div>
+          )}
 
           {/* Deadline Badge */}
           {node.is_task && node.deadline && (
@@ -162,9 +178,9 @@ export const NodeRow = ({ node, depth }: NodeRowProps) => {
         </AnimatePresence>
       </motion.div>
 
-      {/* Children (for folders) */}
+      {/* Children (for folders and tasks with subtasks) */}
       <AnimatePresence initial={false}>
-        {!node.is_task && isExpanded && node.children && (
+        {isExpanded && node.children && node.children.length > 0 && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}

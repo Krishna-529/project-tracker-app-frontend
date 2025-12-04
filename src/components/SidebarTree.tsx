@@ -59,9 +59,13 @@ interface SidebarTreeProps {
   onMove?: (nodeId: number, newParentId: number | null) => void | Promise<unknown>;
   onSetDeadline?: (nodeId: number, deadline: string | null) => void | Promise<unknown>;
   onSendToDailyQuest?: (nodeId: number) => void | Promise<unknown>;
+  onUpdateNotes?: (nodeId: number, notes: string) => void | Promise<unknown>;
   onSelectAll?: () => void;
   isAllSelected?: boolean;
   openedProjectName?: string | null;
+  openedProjectId?: number | null;
+  hideBottomButton?: boolean;
+  hideHeader?: boolean;
 }
 
 export function SidebarTree({
@@ -80,9 +84,13 @@ export function SidebarTree({
   onMove,
   onSetDeadline,
   onSendToDailyQuest,
+  onUpdateNotes,
   onSelectAll,
   isAllSelected,
   openedProjectName,
+  openedProjectId,
+  hideBottomButton = false,
+  hideHeader = false,
 }: SidebarTreeProps) {
   const [showProjectPicker, setShowProjectPicker] = useState(false);
   const [showBottomAddInput, setShowBottomAddInput] = useState(false);
@@ -112,15 +120,9 @@ export function SidebarTree({
   };
 
   useEffect(() => {
-    console.log('[SidebarTree] nodes prop changed, isSyncingRef:', isSyncingRef.current);
-    console.log('[SidebarTree] New nodes structure:', JSON.stringify(nodes.map(n => ({ id: n.id, name: n.name, children: n.children?.map(c => ({ id: c.id, name: c.name })) })), null, 2));
-    
     latestNodesRef.current = nodes;
     if (!isSyncingRef.current) {
-      console.log('[SidebarTree] Updating treeData with new nodes');
       setTreeData(nodes);
-    } else {
-      console.log('[SidebarTree] Skipping treeData update because syncing');
     }
   }, [nodes]);
   useEffect(() => {
@@ -201,26 +203,22 @@ export function SidebarTree({
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveDragId(Number(event.active.id));
-    console.log('[DragStart] Started dragging node:', event.active.id);
     
     // Check initial Shift state
     const initialShiftState = event.active.data.current?.event?.shiftKey || false;
     if (initialShiftState) {
       setIsShiftPressed(true);
-      console.log('[DragStart] Shift initially pressed');
     }
     
     // Track Shift key state
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Shift') {
-        console.log('[Shift] Key pressed down');
         setIsShiftPressed(true);
       }
     };
     
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.key === 'Shift') {
-        console.log('[Shift] Key released');
         setIsShiftPressed(false);
       }
     };
@@ -230,7 +228,6 @@ export function SidebarTree({
     
     // Cleanup on drag end
     const cleanup = () => {
-      console.log('[DragStart] Cleaning up event listeners');
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('mouseup', cleanup);
@@ -243,24 +240,17 @@ export function SidebarTree({
     const wasShiftPressed = isShiftPressed;
     const { active, over } = event;
     
-    console.log('[DragEnd] wasShiftPressed:', wasShiftPressed);
-    console.log('[DragEnd] activeId:', active.id, 'overId:', over?.id);
-    console.log('[DragEnd] active.data:', active.data.current);
-    console.log('[DragEnd] over.data:', over?.data?.current);
-    
     setActiveDragId(null);
     setIsShiftPressed(false);
     setHoveredNodeId(null);
     setOverNodeId(null);
     
     if (!over) {
-      console.log('[DragEnd] No over target, aborting');
       return;
     }
 
     // Check if dropped on the bottom drop zone
     if (over.id === 'bottom-drop-zone') {
-      console.log('[DragEnd] Dropped on bottom zone, moving to end');
       const activeId = Number(active.id);
       const activeParentId = (active.data.current?.parentId ?? null) as number | null;
       
@@ -283,9 +273,9 @@ export function SidebarTree({
 
           debounceTimerRef.current = setTimeout(() => {
             const orderedIds = updatedTree.map(node => node.id);
-            console.log('[DragEnd] Sending bottom drop reorder to backend - parentId: null orderedIds:', orderedIds);
+            const actualParentId = openedProjectId ?? null;
             if (orderedIds.length > 0 && onReorder) {
-              const maybePromise = onReorder(null, orderedIds);
+              const maybePromise = onReorder(actualParentId, orderedIds);
               if (maybePromise && typeof (maybePromise as Promise<unknown>).then === 'function') {
                 void (maybePromise as Promise<unknown>)
                   .then(() => {
@@ -311,29 +301,20 @@ export function SidebarTree({
     const overId = Number(over.id);
 
     if (activeId === overId) {
-      console.log('[DragEnd] Dragged onto self, aborting');
       return;
     }
 
     // Check if Shift was pressed - this takes priority over parent checking
     if (wasShiftPressed) {
-      console.log('[DragEnd] Shift mode - attempting to move into folder');
       // Shift mode: move into folder
       const overNode = findNodeById(treeData, overId);
       const activeNode = findNodeById(treeData, activeId);
       
-      console.log('[DragEnd] Active node:', activeNode?.name, '(id:', activeId, ', parent_id:', activeNode?.parent_id, ')');
-      console.log('[DragEnd] Over node:', overNode?.name, '(id:', overId, ', parent_id:', overNode?.parent_id, ', is_task:', overNode?.is_task, ')');
-      console.log('[DragEnd] Active node children:', activeNode?.children?.map(c => `${c.name}(${c.id})`));
-      console.log('[DragEnd] Tree structure:', JSON.stringify(treeData, null, 2));
-      
       if (!overNode) {
-        console.log('[DragEnd] Over node not found, aborting');
         return;
       }
       
       if (overNode.is_task) {
-        console.log('[DragEnd] Cannot drop into a task, aborting');
         return;
       }
       
@@ -342,18 +323,15 @@ export function SidebarTree({
       const isTargetDescendant = activeNodeFromTree ? isDescendant([activeNodeFromTree], activeNodeFromTree.id, overId) : false;
       
       if (isTargetDescendant) {
-        console.log('[DragEnd] Cannot drop node onto its own descendant, aborting');
         return;
       }
       
       // Check if active node is already a child of over node
       if (activeNode?.parent_id === overId) {
-        console.log('[DragEnd] Node is already a child of target, aborting');
         return;
       }
       
       if (onMove) {
-        console.log('[DragEnd] Calling onMove with activeId:', activeId, 'newParentId:', overId);
         const updatedTree = moveNodeWithinTree(treeData, activeId, overId);
         setTreeData(updatedTree);
         isSyncingRef.current = true;
@@ -384,15 +362,10 @@ export function SidebarTree({
                        (activeParentId === null && overParentId === null);
 
     if (canReorder) {
-      console.log('[DragEnd] Reordering within same parent:', activeParentId);
-      console.log('[DragEnd] Before reorder, treeData:', JSON.stringify(treeData.map(n => ({ id: n.id, name: n.name, children: n.children?.map(c => ({ id: c.id, name: c.name })) })), null, 2));
-      
       const updatedTree = reorderWithinParent(treeData, activeParentId, activeId, overId);
       if (updatedTree === treeData) {
         return;
       }
-
-      console.log('[DragEnd] After reorder, updatedTree:', JSON.stringify(updatedTree.map(n => ({ id: n.id, name: n.name, children: n.children?.map(c => ({ id: c.id, name: c.name })) })), null, 2));
 
       // Optimistic update
       setTreeData(updatedTree);
@@ -409,9 +382,9 @@ export function SidebarTree({
 
       debounceTimerRef.current = setTimeout(() => {
         const orderedIds = getChildOrder(updatedTree, activeParentId);
-        console.log('[DragEnd] Sending reorder to backend - parentId:', activeParentId, 'orderedIds:', orderedIds);
+        const actualParentId = activeParentId === null ? (openedProjectId ?? null) : activeParentId;
         if (orderedIds.length > 0 && onReorder) {
-          const maybePromise = onReorder(activeParentId, orderedIds);
+          const maybePromise = onReorder(actualParentId, orderedIds);
           if (maybePromise && typeof (maybePromise as Promise<unknown>).then === 'function') {
             void (maybePromise as Promise<unknown>)
               .then(() => {
@@ -468,49 +441,51 @@ export function SidebarTree({
   return (
     <>
       <div className="h-full flex flex-col bg-card">
-        {/* Header with Open Project Button */}
-        <div className="px-4 py-3 border-b border-border bg-secondary/50 flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <h2
-              className={cn(
-                'text-sm font-bold text-primary tracking-wide uppercase truncate flex-1',
-                onSelectAll && 'cursor-pointer',
-                isAllSelected ? 'text-primary' : 'text-primary/80',
-              )}
-              onClick={onSelectAll}
-            >
-              {openedProjectName || 'All Projects'}
-            </h2>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={expandedNodes.size > 0 ? collapseAll : expandAll}
+        {/* Optional Header with Open Project Button */}
+        {!hideHeader && (
+          <div className="px-4 py-3 border-b border-border bg-secondary/50 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <h2
                 className={cn(
-                  'p-1.5 rounded-md transition-all flex-shrink-0',
-                  'hover:bg-primary/20 border border-transparent hover:border-primary/30',
-                  'text-muted-foreground hover:text-primary'
+                  'text-sm font-bold text-primary tracking-wide uppercase truncate flex-1',
+                  onSelectAll && !openedProjectName && 'cursor-pointer',
+                  isAllSelected ? 'text-primary' : 'text-primary/80',
                 )}
-                title={expandedNodes.size > 0 ? "Collapse All" : "Expand All"}
+                onClick={openedProjectName ? undefined : onSelectAll}
               >
-                {expandedNodes.size > 0 ? (
-                  <ChevronsDownUp className="w-4 h-4" />
-                ) : (
-                  <ChevronsUpDown className="w-4 h-4" />
-                )}
-              </button>
-              <button
-                onClick={() => setShowProjectPicker(true)}
-                className={cn(
-                  'p-1.5 rounded-md transition-all flex-shrink-0',
-                  'hover:bg-primary/20 border border-transparent hover:border-primary/30',
-                  'text-muted-foreground hover:text-primary'
-                )}
-                title="Open Project"
-              >
-                <Folder className="w-4 h-4" />
-              </button>
+                {openedProjectName || 'All Projects'}
+              </h2>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={expandedNodes.size > 0 ? collapseAll : expandAll}
+                  className={cn(
+                    'p-1.5 rounded-md transition-all flex-shrink-0',
+                    'hover:bg-primary/20 border border-transparent hover:border-primary/30',
+                    'text-muted-foreground hover:text-primary'
+                  )}
+                  title={expandedNodes.size > 0 ? "Collapse All" : "Expand All"}
+                >
+                  {expandedNodes.size > 0 ? (
+                    <ChevronsDownUp className="w-4 h-4" />
+                  ) : (
+                    <ChevronsUpDown className="w-4 h-4" />
+                  )}
+                </button>
+                <button
+                  onClick={() => setShowProjectPicker(true)}
+                  className={cn(
+                    'p-1.5 rounded-md transition-all flex-shrink-0',
+                    'hover:bg-primary/20 border border-transparent hover:border-primary/30',
+                    'text-muted-foreground hover:text-primary'
+                  )}
+                  title="Open Project"
+                >
+                  <Folder className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         <div className="p-3 overflow-y-auto flex-1" onWheel={handleWheel}>
           {/* Shift key indicator during drag */}
@@ -548,6 +523,7 @@ export function SidebarTree({
                   onRename={onRename}
                   onDelete={onDelete}
                   onArchive={onArchive}
+                  onOpenProject={onOpenProject}
                   level={0}
                   isShiftPressed={isShiftPressed}
                   hoveredNodeId={hoveredNodeId}
@@ -578,7 +554,7 @@ export function SidebarTree({
         </div>
         
         {/* Floating Add Project Button - Only show at root level */}
-        {!openedProjectName && (
+        {!openedProjectName && !hideBottomButton && (
           <div className="px-3 pb-3 flex-shrink-0 border-t border-border bg-card">
             {showBottomAddInput ? (
               <div className="flex items-center gap-2 mt-3">
@@ -588,35 +564,25 @@ export function SidebarTree({
                   value={bottomProjectName}
                   onChange={(e) => setBottomProjectName(e.target.value)}
                   onBlur={() => {
-                    if (!bottomProjectName.trim()) {
+                    if (bottomProjectName.trim()) {
+                      handleCreateBottomProject();
+                    } else {
                       setShowBottomAddInput(false);
                     }
                   }}
                   onKeyDown={handleBottomKeyDown}
                   placeholder="Project name..."
-                  className="flex-1 text-sm bg-background border-2 border-accent rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent/20"
+                  className="flex-1 text-sm bg-background border border-border/40 rounded-lg px-3 py-2 focus:outline-none focus:border-primary/50 transition-colors"
                 />
-                <button
-                  onClick={handleCreateBottomProject}
-                  disabled={!bottomProjectName.trim()}
-                  className={cn(
-                    'px-3 py-2 text-xs font-medium rounded-lg transition-all',
-                    bottomProjectName.trim()
-                      ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                      : 'bg-muted text-muted-foreground cursor-not-allowed'
-                  )}
-                >
-                  Add
-                </button>
               </div>
             ) : (
               <button
                 onClick={() => setShowBottomAddInput(true)}
                 className={cn(
                   'w-full mt-3 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg transition-all',
-                  'bg-primary text-primary-foreground hover:bg-primary/90',
-                  'border border-primary/20 hover:border-primary/30',
-                  'shadow-sm hover:shadow-md'
+                  'bg-card text-muted-foreground hover:text-foreground',
+                  'border border-transparent hover:border-border/60',
+                  'hover:bg-accent/5'
                 )}
               >
                 <Plus className="w-4 h-4" />
@@ -648,6 +614,7 @@ interface TreeNodeProps {
   onRename?: (nodeId: number, newName: string) => void;
   onArchive?: (nodeId: number, archive: boolean) => void | Promise<unknown>;
   onDelete?: (nodeId: number) => void | Promise<unknown>;
+  onOpenProject?: (nodeId: number) => void;
   level: number;
   isShiftPressed: boolean;
   hoveredNodeId: number | null;
@@ -660,10 +627,11 @@ interface TreeNodeProps {
   toggleNodeExpansion: (nodeId: number) => void;
   onSetDeadline?: (nodeId: number, deadline: string | null) => void | Promise<unknown>;
   onSendToDailyQuest?: (nodeId: number) => void | Promise<unknown>;
+  onUpdateNotes?: (nodeId: number, notes: string) => void | Promise<unknown>;
   allNodes: Node[];
 }
 
-function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTask, onRename, onArchive, onDelete, level, isShiftPressed, hoveredNodeId, activeDragId, overNodeId, isDraggingAncestor, isExpanded, onToggleExpand, expandedNodes, toggleNodeExpansion, onSetDeadline, onSendToDailyQuest, allNodes }: TreeNodeProps) {
+function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTask, onRename, onArchive, onDelete, onOpenProject, level, isShiftPressed, hoveredNodeId, activeDragId, overNodeId, isDraggingAncestor, isExpanded, onToggleExpand, expandedNodes, toggleNodeExpansion, onSetDeadline, onSendToDailyQuest, onUpdateNotes, allNodes }: TreeNodeProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [editName, setEditName] = useState(node.name);
@@ -674,6 +642,8 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
   const [isArchivedExpanded, setIsArchivedExpanded] = useState(true);
   const [showDeadlineDialog, setShowDeadlineDialog] = useState(false);
   const [pendingDeadline, setPendingDeadline] = useState<Date | undefined>(undefined);
+  const [showNotesDialog, setShowNotesDialog] = useState(false);
+  const [notesText, setNotesText] = useState<string>(node.notes || '');
   const inputRef = useRef<HTMLInputElement>(null);
   const addInputRef = useRef<HTMLInputElement>(null);
   const childNodes = node.children ?? [];
@@ -735,6 +705,13 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
     }
   }, [isRenaming]);
 
+  // Auto-enter edit mode for new tasks with default "New Task" name (including timestamp)
+  useEffect(() => {
+    if (node.is_task && node.name.startsWith('New Task') && isSelected && !isRenaming && onRename) {
+      setIsRenaming(true);
+    }
+  }, [node.is_task, node.name, isSelected, isRenaming, onRename]);
+
   useEffect(() => {
     if (showAddInput && addInputRef.current) {
       addInputRef.current.focus();
@@ -752,6 +729,10 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
       setPendingDeadline(node.deadline ? new Date(node.deadline) : undefined);
     }
   }, [showDeadlineDialog, node.deadline]);
+
+  useEffect(() => {
+    setNotesText(node.notes || '');
+  }, [node.notes]);
 
   const handleRename = () => {
     if (editName.trim() && editName !== node.name && onRename) {
@@ -841,6 +822,19 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
       setShowDeadlineDialog(false);
     } catch (error) {
       console.error('[TreeNode] Failed to clear deadline', error);
+    }
+  };
+
+  const handleSaveNotes = async () => {
+    if (!onUpdateNotes) {
+      setShowNotesDialog(false);
+      return;
+    }
+    try {
+      await onUpdateNotes(node.id, notesText);
+      setShowNotesDialog(false);
+    } catch (error) {
+      console.error('[TreeNode] Failed to save notes', error);
     }
   };
 
@@ -1068,16 +1062,21 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
           {...listeners}
           className={cn(
             'group flex items-center gap-2 py-2 px-2 rounded-lg cursor-pointer transition-all select-none',
-            'hover:bg-secondary/50',
+            'sidebar-item-hover',
             isSelected
-              ? 'bg-secondary border-l-3 border-accent font-medium shadow-sm'
-              : 'border-l-3 border-transparent hover-border-accent/30',
+              ? 'sidebar-item-active pl-[9px] font-medium shadow-sm'
+              : 'border-l-3 border-transparent',
             isDragging && 'cursor-grabbing',
             isShiftDropTarget && 'ring-2 ring-primary',
             isArchived && !isSelected && 'opacity-70',
           )}
           style={rowStyle}
           onClick={handleClick}
+          onDoubleClick={() => {
+            if (!node.is_task) {
+              onOpenProject?.(node.id);
+            }
+          }}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
@@ -1117,7 +1116,20 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
           />
         ) : (
           <div className="flex-1 flex items-center gap-2 min-w-0">
-            <span className={nameClasses}>{node.name}</span>
+            <span 
+              className={cn(
+                nameClasses, 
+                node.is_task && !isArchived && "cursor-text hover:text-primary transition-colors"
+              )}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (node.is_task && !isArchived && onRename) {
+                  setIsRenaming(true);
+                }
+              }}
+            >
+              {node.name}
+            </span>
             {isArchived && (
               <span className="text-[10px] uppercase font-semibold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
                 Archived
@@ -1134,6 +1146,25 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
 
         {isHovered && !isRenaming && (
           <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+            {/* Notes icon button */}
+            <button
+              className={cn(
+                'w-6 h-6 flex items-center justify-center rounded-md border border-transparent',
+                'hover:bg-accent/20 hover:border-accent/50 text-muted-foreground hover:text-accent'
+              )}
+              title="Notes"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowNotesDialog(true);
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <path d="M14 2v6h6"/>
+                <path d="M16 13H8"/>
+                <path d="M16 17H8"/>
+              </svg>
+            </button>
             <div className="relative group/menu">
               <div
                 className="w-6 h-6 flex items-center justify-center hover:bg-accent/20 rounded-md border border-transparent hover:border-accent/50 transition-all cursor-pointer"
@@ -1229,6 +1260,32 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
         </DialogContent>
       </Dialog>
 
+      {/* Notes Dialog */}
+      <Dialog open={showNotesDialog} onOpenChange={setShowNotesDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Notes</DialogTitle>
+            <DialogDescription>
+              Add notes or description for this item.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <textarea
+              value={notesText}
+              onChange={(e) => setNotesText(e.target.value)}
+              className="w-full min-h-[140px] px-3 py-2 rounded-md border border-border bg-background text-sm"
+              placeholder="Write notes here..."
+            />
+          </div>
+          <DialogFooter className="sm:justify-between">
+            <DialogClose asChild>
+              <Button variant="secondary">Cancel</Button>
+            </DialogClose>
+            <Button onClick={() => { void handleSaveNotes(); }}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {!node.is_task && isExpanded && (
         <>
           {archivedChildNodes.length > 0 && (
@@ -1275,6 +1332,7 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
                       onRename={onRename}
                       onArchive={onArchive}
                       onDelete={onDelete}
+                      onOpenProject={onOpenProject}
                       level={level + 1}
                       isShiftPressed={isShiftPressed}
                       hoveredNodeId={hoveredNodeId}
@@ -1309,6 +1367,7 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
                 onRename={onRename}
                 onArchive={onArchive}
                 onDelete={onDelete}
+                  onOpenProject={onOpenProject}
                 level={level + 1}
                 isShiftPressed={isShiftPressed}
                 hoveredNodeId={hoveredNodeId}
@@ -1338,6 +1397,7 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
                   onRename={onRename}
                   onArchive={onArchive}
                   onDelete={onDelete}
+                  onOpenProject={onOpenProject}
                   level={level + 1}
                   isShiftPressed={isShiftPressed}
                   hoveredNodeId={hoveredNodeId}
@@ -1371,30 +1431,17 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
                   value={addName}
                   onChange={(e) => setAddName(e.target.value)}
                   onBlur={() => {
-                    if (!addName.trim()) {
+                    if (addName.trim()) {
+                      handleCreateAdd();
+                    } else {
                       setShowAddInput(false);
                     }
                   }}
                   onKeyDown={handleAddKeyDown}
                   placeholder={`${addInputType === 'project' ? 'Project' : 'Task'} name...`}
-                  className="flex-1 text-sm bg-background border-2 border-accent rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent/20"
+                  className="flex-1 text-sm bg-background border border-border/40 rounded-lg px-3 py-1.5 focus:outline-none focus:border-primary/50 transition-colors"
                   onClick={(e) => e.stopPropagation()}
                 />
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCreateAdd();
-                  }}
-                  disabled={!addName.trim()}
-                  className={cn(
-                    'px-3 py-1.5 text-xs font-medium rounded-lg transition-all',
-                    addName.trim()
-                      ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                      : 'bg-muted text-muted-foreground cursor-not-allowed'
-                  )}
-                >
-                  Add
-                </button>
               </div>
             </div>
           )}
@@ -1442,6 +1489,8 @@ const findNodeById = (nodes: Node[], id: number): Node | null => {
   }
   return null;
 };
+
+// (breadcrumb helpers were moved to Index.tsx)
 
 const reorderWithinParent = (
   nodes: Node[],
@@ -1602,3 +1651,5 @@ const moveNodeWithinTree = (nodes: Node[], nodeId: number, newParentId: number |
 
   return insertIntoParent(rootsWithoutNode);
 };
+
+// (breadcrumb helpers removed)
