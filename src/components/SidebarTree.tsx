@@ -42,6 +42,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Calendar } from '@/components/ui/calendar';
+import { fetchNodeById } from '@/lib/api';
 
 interface SidebarTreeProps {
   nodes: Node[];
@@ -535,6 +536,7 @@ export function SidebarTree({
                   toggleNodeExpansion={toggleNodeExpansion}
                   onSetDeadline={onSetDeadline}
                   onSendToDailyQuest={onSendToDailyQuest}
+                  onUpdateNotes={onUpdateNotes}
                   allNodes={treeData}
                 />
               ))}
@@ -643,7 +645,8 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
   const [showDeadlineDialog, setShowDeadlineDialog] = useState(false);
   const [pendingDeadline, setPendingDeadline] = useState<Date | undefined>(undefined);
   const [showNotesDialog, setShowNotesDialog] = useState(false);
-  const [notesText, setNotesText] = useState<string>(node.notes || '');
+  const [notesText, setNotesText] = useState<string>(node.meta_description || '');
+  const notesTextareaRef = useRef<HTMLTextAreaElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const addInputRef = useRef<HTMLInputElement>(null);
   const childNodes = node.children ?? [];
@@ -731,8 +734,8 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
   }, [showDeadlineDialog, node.deadline]);
 
   useEffect(() => {
-    setNotesText(node.notes || '');
-  }, [node.notes]);
+    setNotesText(node.meta_description || '');
+  }, [node.meta_description]);
 
   const handleRename = () => {
     if (editName.trim() && editName !== node.name && onRename) {
@@ -1155,7 +1158,30 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
               title="Notes"
               onClick={(e) => {
                 e.stopPropagation();
-                setShowNotesDialog(true);
+                // Load latest metaDescription before opening
+                fetchNodeById(node.id)
+                  .then((detail) => {
+                    const latest = detail?.data?.metaDescription || '';
+                    setNotesText(latest);
+                    setShowNotesDialog(true);
+                    setTimeout(() => {
+                      if (notesTextareaRef.current) {
+                        notesTextareaRef.current.focus();
+                        const len = latest.length;
+                        notesTextareaRef.current.setSelectionRange(len, len);
+                      }
+                    }, 10);
+                  })
+                  .catch(() => {
+                    setShowNotesDialog(true);
+                    setTimeout(() => {
+                      if (notesTextareaRef.current) {
+                        const len = notesText.length;
+                        notesTextareaRef.current.focus();
+                        notesTextareaRef.current.setSelectionRange(len, len);
+                      }
+                    }, 10);
+                  });
               }}
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
@@ -1265,16 +1291,21 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Notes</DialogTitle>
-            <DialogDescription>
-              Add notes or description for this item.
-            </DialogDescription>
+            <DialogDescription className="sr-only">Add notes or description for this item.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">
             <textarea
+              ref={notesTextareaRef}
               value={notesText}
               onChange={(e) => setNotesText(e.target.value)}
-              className="w-full min-h-[140px] px-3 py-2 rounded-md border border-border bg-background text-sm"
+              className="w-full min-h-[140px] px-3 py-2 rounded-md border border-border/50 bg-background text-sm focus:outline-none focus:ring-0 focus:border-border/40 transition-colors"
               placeholder="Write notes here..."
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  void handleSaveNotes();
+                }
+              }}
             />
           </div>
           <DialogFooter className="sm:justify-between">
@@ -1345,6 +1376,7 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
                       toggleNodeExpansion={toggleNodeExpansion}
                       onSetDeadline={onSetDeadline}
                       onSendToDailyQuest={onSendToDailyQuest}
+                      onUpdateNotes={onUpdateNotes}
                       allNodes={allNodes}
                     />
                   ))}
@@ -1380,6 +1412,7 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
                 toggleNodeExpansion={toggleNodeExpansion}
                 onSetDeadline={onSetDeadline}
                 onSendToDailyQuest={onSendToDailyQuest}
+                onUpdateNotes={onUpdateNotes}
                 allNodes={allNodes}
               />
             ))
@@ -1410,6 +1443,7 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
                   toggleNodeExpansion={toggleNodeExpansion}
                   onSetDeadline={onSetDeadline}
                   onSendToDailyQuest={onSendToDailyQuest}
+                  onUpdateNotes={onUpdateNotes}
                   allNodes={allNodes}
                 />
               ))}

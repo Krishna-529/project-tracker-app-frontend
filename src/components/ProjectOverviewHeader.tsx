@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle, Settings, StickyNote } from 'lucide-react';
+import { CheckCircle2, Circle, Settings } from 'lucide-react';
 import { useMemo } from 'react';
 import { format } from 'date-fns';
 import type { Node } from '@/types/node';
@@ -18,6 +18,7 @@ interface ProjectOverviewHeaderProps {
   onArchive?: () => void;
   onDelete?: () => void;
   onNotesChange?: (notes: string) => void;
+  onEditDescription?: () => void;
 }
 
 export function ProjectOverviewHeader({
@@ -27,6 +28,7 @@ export function ProjectOverviewHeader({
   onArchive,
   onDelete,
   onNotesChange,
+  onEditDescription,
 }: ProjectOverviewHeaderProps) {
   const stats = useMemo(() => {
     const total = allTasks.length;
@@ -74,17 +76,23 @@ export function ProjectOverviewHeader({
 
         {/* Action buttons */}
         <div className="flex items-center gap-2 flex-wrap justify-end">
-          {/* Notes button (informational; notes live in main content) */}
+          {/* Notes/Description icon opens modal in main content */}
           <button
+            onClick={() => onEditDescription?.()}
             className={cn(
               'p-2 rounded-lg transition-colors',
-              'hover:bg-secondary text-muted-foreground hover:text-foreground',
-              'cursor-default'
+              'hover:bg-secondary text-muted-foreground hover:text-foreground'
             )}
-            title="Notes are shown in the main content"
-            aria-disabled
+            title="Notes"
+            aria-label="Notes"
           >
-            <StickyNote className="w-5 h-5" />
+            {/* document icon for consistency with header */}
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <path d="M14 2v6h6"/>
+              <path d="M16 13H8"/>
+              <path d="M16 17H8"/>
+            </svg>
           </button>
 
           {/* Quick settings dropdown */}

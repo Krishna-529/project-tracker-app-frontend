@@ -190,6 +190,67 @@ export const sendToDailyQuest = async (nodeId: number) => {
   return response.json();
 };
 
+export const deleteFromDailyQuest = async (nodeId: number) => {
+  const response = await fetch(`${API_BASE_URL}/integrations/daily-quest/${nodeId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    // Swallow 404s gracefully in case item was never synced or already removed
+    if (response.status === 404) return { ok: true } as any;
+    throw new Error(`Failed to delete from Daily Quest: ${response.statusText}`);
+  }
+
+  return response.json();
+};
+
+// Some backends may prefer a POST "delete" action route; mirror the working send style
+export const deleteFromDailyQuestPost = async (nodeId: number) => {
+  const response = await fetch(`${API_BASE_URL}/integrations/daily-quest/${nodeId}/delete`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    if (response.status === 404) return { ok: true } as any;
+    throw new Error(`Failed to delete from Daily Quest (POST): ${response.statusText}`);
+  }
+
+  return response.json();
+};
+
+// Direct Supabase delete (no backend), mirroring how posting would use DB URL
+// Env vars expected:
+// - VITE_SUPABASE_URL: e.g. https://<project>.supabase.co
+// - VITE_SUPABASE_ANON_KEY: anon key for auth
+// Table and column names may need adjustment to your schema.
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/$/, '') ?? '';
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+
+export const deleteFromDailyQuestSupabase = async (nodeId: number) => {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    throw new Error('Supabase URL or key not configured');
+  }
+  // Assuming a table `daily_quest_tasks` with a column `source_node_id` storing Project Tracker node id
+  const url = `${SUPABASE_URL}/rest/v1/daily_quest_tasks?source_node_id=eq.${nodeId}`;
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation',
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`Supabase delete failed: ${response.status} ${text}`);
+  }
+  return response.json().catch(() => ({}));
+};
+
 export const getGoogleAuthUrl = async () => {
   const response = await fetch(`${API_BASE_URL}/auth/google/url`, {
     credentials: 'include',

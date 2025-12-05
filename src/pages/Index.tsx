@@ -4,14 +4,14 @@ import { toast } from 'sonner';
 
 import { TreeContainer } from '@/components/ProjectTree/TreeContainer';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuPortal } from '@/components/ui/dropdown-menu';
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { SidebarTree } from '@/components/SidebarTree';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { ProjectOverviewHeader } from '@/components/ProjectOverviewHeader';
 import { SearchBar, type SearchFilters } from '@/components/SearchBar';
 import { ViewsDropdown, type ViewMode } from '@/components/ViewsDropdown';
 import { useKeyboardShortcuts, KeyboardShortcutsHelp } from '@/hooks/use-keyboard-shortcuts';
-import { fetchNodeTree, createNode, updateNode, reorderNodes as reorderNodesApi, moveNode as moveNodeApi, deleteNode } from '@/lib/api';
+import { fetchNodeTree, createNode, updateNode, reorderNodes as reorderNodesApi, moveNode as moveNodeApi, deleteNode, fetchNodeById } from '@/lib/api';
 import { buildNodeTree } from '@/lib/nodeTree';
 import { cn } from '@/lib/utils';
 import type { Node } from '@/types/node';
@@ -117,6 +117,7 @@ const Index = () => {
   // Meta description modal
   const [isMetaModalOpen, setIsMetaModalOpen] = useState(false);
   const [metaDescription, setMetaDescription] = useState('');
+  const metaTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const openAddMenu = useCallback(() => {
     if (addMenuCloseTimerRef.current) {
@@ -170,7 +171,8 @@ const Index = () => {
     const targetId = openedProjectId ?? activeProjectId;
     if (targetId != null) {
       const node = nodeMap.get(targetId);
-      setNotesText(node?.notes || '');
+      // Legacy notes not used; unify on meta_description
+      setNotesText(node?.meta_description || '');
       setMetaDescription(node?.meta_description || '');
     } else {
       setNotesText('');
@@ -275,7 +277,7 @@ const Index = () => {
     const targetId = openedProjectId ?? activeProjectId;
     if (targetId == null) return;
     try {
-      await updateNode(targetId, { notes: notesText });
+      await updateNode(targetId, { metaDescription: notesText });
       toast.success('Notes saved');
     } catch (err) {
       toast.error('Failed to save notes', {
@@ -285,6 +287,32 @@ const Index = () => {
       void refreshTree();
     }
   }, [openedProjectId, activeProjectId, notesText, refreshTree]);
+  const openMetaModal = useCallback(async () => {
+    if (openedProjectId == null) return;
+    try {
+      const detail = await fetchNodeById(openedProjectId);
+      const latest = detail?.data?.metaDescription || '';
+      setMetaDescription(latest);
+      setIsMetaModalOpen(true);
+      setTimeout(() => {
+        if (metaTextareaRef.current) {
+          metaTextareaRef.current.focus();
+          const len = latest.length;
+          metaTextareaRef.current.setSelectionRange(len, len);
+        }
+      }, 10);
+    } catch {
+      // Fallback to current state
+      setIsMetaModalOpen(true);
+      setTimeout(() => {
+        if (metaTextareaRef.current) {
+          const len = metaDescription.length;
+          metaTextareaRef.current.focus();
+          metaTextareaRef.current.setSelectionRange(len, len);
+        }
+      }, 10);
+    }
+  }, [openedProjectId, metaDescription]);
 
   const handleSaveMeta = useCallback(async () => {
     if (openedProjectId == null) {
@@ -292,8 +320,8 @@ const Index = () => {
       return;
     }
     try {
-      await updateNode(openedProjectId, { meta_description: metaDescription });
-      toast.success('Description updated');
+      await updateNode(openedProjectId, { metaDescription: metaDescription });
+      toast.success('Notes saved');
       setIsMetaModalOpen(false);
     } catch (err) {
       toast.error('Failed to update description', {
@@ -378,6 +406,22 @@ const Index = () => {
 
   const handleDelete = useCallback(
     async (nodeId: number) => {
+      // Collect this node and all descendant ids before deleting locally
+      const collectIds = (id: number): number[] => {
+        const target = nodeMap.get(id);
+        if (!target) return [id];
+        const ids: number[] = [id];
+        const stack = [...(target.children ?? [])];
+        while (stack.length > 0) {
+          const n = stack.pop()!;
+          ids.push(n.id);
+          if (n.children && n.children.length) {
+            stack.push(...n.children);
+          }
+        }
+        return ids;
+      };
+      const idsToDeleteInDQ = collectIds(nodeId);
       try {
         await deleteNode(nodeId);
         toast.success('Deleted successfully');
@@ -396,6 +440,8 @@ const Index = () => {
         if (openedProjectId === nodeId) {
           setOpenedProjectId(null);
         }
+
+        // Daily Quest deletion is now handled server-side; no client calls needed
       } catch (err) {
         toast.error('Failed to delete', {
           description: err instanceof Error ? err.message : undefined,
@@ -405,7 +451,7 @@ const Index = () => {
         void refreshTree();
       }
     },
-    [refreshTree, selection, activeProjectId, openedProjectId],
+    [refreshTree, selection, activeProjectId, openedProjectId, nodeMap],
   );
 
   const handleArchive = useCallback(
@@ -729,6 +775,7 @@ const Index = () => {
                     void updateNode(activeProjectId, { notes });
                     void refreshTree();
                   }}
+                  onEditDescription={() => { void openMetaModal(); }}
                 />
               </div>
             )}
@@ -795,10 +842,10 @@ const Index = () => {
                   {/* Top-right meta description icon (green area) */}
                   {openedProjectId != null && (
                     <button
-                      onClick={() => setIsMetaModalOpen(true)}
+                      onClick={() => { void openMetaModal(); }}
                       className="p-2 rounded-md border border-border/60 hover:border-border bg-card hover:bg-accent/5 text-muted-foreground hover:text-foreground"
-                      title="Edit description"
-                      aria-label="Edit description"
+                      title="Notes"
+                      aria-label="Notes"
                     >
                       {/* document icon */}
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
@@ -832,7 +879,7 @@ const Index = () => {
                   onSendToDailyQuest={handleSendToDailyQuest}
                   onUpdateNotes={async (nodeId, notes) => {
                     try {
-                      await updateNode(nodeId, { notes });
+                      await updateNode(nodeId, { metaDescription: notes });
                       toast.success('Notes saved');
                     } catch (err) {
                       toast.error('Failed to save notes', {
@@ -983,17 +1030,22 @@ const Index = () => {
       <Dialog open={isMetaModalOpen} onOpenChange={setIsMetaModalOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Edit Project Description</DialogTitle>
-            <DialogDescription>
-              Update the meta description for the opened project.
-            </DialogDescription>
+            <DialogTitle>Notes</DialogTitle>
+            <DialogDescription className="sr-only">Add notes or description for this item.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <textarea
+              ref={metaTextareaRef}
               value={metaDescription}
               onChange={(e) => setMetaDescription(e.target.value)}
-              className="w-full min-h-[140px] px-3 py-2 rounded-md border border-border bg-background text-sm"
-              placeholder="Enter description..."
+              className="w-full min-h-[140px] px-3 py-2 rounded-md border border-border/50 bg-background text-sm focus:outline-none focus:ring-0 focus:border-border/40 transition-colors"
+              placeholder="Enter notes..."
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  void handleSaveMeta();
+                }
+              }}
             />
           </div>
           <DialogFooter className="sm:justify-between">
