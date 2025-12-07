@@ -13,7 +13,7 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Archive, ArchiveRestore, Calendar as CalendarIcon, ChevronRight, ChevronsDownUp, ChevronsUpDown, Folder, FolderOpen, MoreVertical, Pencil, Plus, Send, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, Calendar as CalendarIcon, ChevronRight, ChevronsDownUp, ChevronsUpDown, Folder, FolderOpen, MoreVertical, Pencil, Plus, Send, Trash2, CheckCircle2, Circle, CircleDot } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { format } from 'date-fns';
@@ -42,7 +42,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Calendar } from '@/components/ui/calendar';
-import { fetchNodeById } from '@/lib/api';
+import { fetchNodeById, updateNode } from '@/lib/api';
 
 interface SidebarTreeProps {
   nodes: Node[];
@@ -67,6 +67,7 @@ interface SidebarTreeProps {
   openedProjectId?: number | null;
   hideBottomButton?: boolean;
   hideHeader?: boolean;
+  onStatusChanged?: () => void;
 }
 
 export function SidebarTree({
@@ -92,6 +93,7 @@ export function SidebarTree({
   openedProjectId,
   hideBottomButton = false,
   hideHeader = false,
+  onStatusChanged,
 }: SidebarTreeProps) {
   const [showProjectPicker, setShowProjectPicker] = useState(false);
   const [showBottomAddInput, setShowBottomAddInput] = useState(false);
@@ -115,6 +117,47 @@ export function SidebarTree({
     },
   });
   const sensors = useSensors(mouseSensor);
+
+  // Optimistic status update helper
+  const optimisticStatusUpdate = useCallback((nodeId: number, status: Node['status']) => {
+    const recomputeFromChildren = (node: Node): Node => {
+      const children = node.children?.map(recomputeFromChildren) ?? [];
+      let newStatus = node.status;
+      if (!node.is_task && children.length > 0) {
+        const allDone = children.every(c => c.status === 'done');
+        const anyInProgress = children.some(c => c.status === 'in_progress');
+        const anyTodo = children.some(c => c.status === 'todo');
+        const anyArchived = children.some(c => c.status === 'archived');
+
+        if (allDone) {
+          newStatus = 'done';
+        } else if (anyInProgress || anyArchived || (!allDone && !anyTodo)) {
+          // If there is any in_progress or archived child, or mixed states, mark in_progress
+          newStatus = 'in_progress';
+        } else if (!anyInProgress && anyTodo) {
+          newStatus = 'todo';
+        }
+      }
+      return { ...node, status: newStatus, children };
+    };
+
+    setTreeData(prev => {
+      const updateStatus = (nodes: Node[]): Node[] =>
+        nodes.map(n => {
+          if (n.id === nodeId) {
+            return { ...n, status };
+          }
+          if (n.children && n.children.length) {
+            return { ...n, children: updateStatus(n.children) };
+          }
+          return n;
+        });
+
+      const updated = updateStatus(prev);
+      // After local change, recompute parents/ancestors derived statuses for good UX
+      return updated.map(recomputeFromChildren);
+    });
+  }, []);
 
   const handleWheel = (e: React.WheelEvent) => {
     e.stopPropagation();
@@ -538,6 +581,8 @@ export function SidebarTree({
                   onSendToDailyQuest={onSendToDailyQuest}
                   onUpdateNotes={onUpdateNotes}
                   allNodes={treeData}
+                  onStatusChanged={onStatusChanged}
+                  onOptimisticStatusChange={optimisticStatusUpdate}
                 />
               ))}
               {activeDragId && treeData.length > 0 && (
@@ -631,9 +676,11 @@ interface TreeNodeProps {
   onSendToDailyQuest?: (nodeId: number) => void | Promise<unknown>;
   onUpdateNotes?: (nodeId: number, notes: string) => void | Promise<unknown>;
   allNodes: Node[];
+  onStatusChanged?: () => void;
+  onOptimisticStatusChange?: (nodeId: number, status: Node['status']) => void;
 }
 
-function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTask, onRename, onArchive, onDelete, onOpenProject, level, isShiftPressed, hoveredNodeId, activeDragId, overNodeId, isDraggingAncestor, isExpanded, onToggleExpand, expandedNodes, toggleNodeExpansion, onSetDeadline, onSendToDailyQuest, onUpdateNotes, allNodes }: TreeNodeProps) {
+function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTask, onRename, onArchive, onDelete, onOpenProject, level, isShiftPressed, hoveredNodeId, activeDragId, overNodeId, isDraggingAncestor, isExpanded, onToggleExpand, expandedNodes, toggleNodeExpansion, onSetDeadline, onSendToDailyQuest, onUpdateNotes, allNodes, onStatusChanged, onOptimisticStatusChange }: TreeNodeProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [editName, setEditName] = useState(node.name);
@@ -670,6 +717,11 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
       activeChildNodes: active,
       archivedChildNodes: archived,
     };
+  }, [childNodes]);
+    
+  // Count daughter projects (children that are projects)
+  const daughterProjectCount = useMemo(() => {
+    return childNodes.filter(c => !c.is_task).length;
   }, [childNodes]);
 
   const deadlineLabel = useMemo(() => {
@@ -842,7 +894,6 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
   };
 
   const handleClick = () => {
-    onSelect(node.id);
     if (canExpand) {
       onToggleExpand();
     }
@@ -997,6 +1048,64 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
     });
   }
 
+  // Project force-complete / unforce
+  if (!node.is_task && !isArchived) {
+    // Force Complete
+    menuSections.push({
+      key: 'force-complete',
+      content: (
+        <button
+          className="w-full px-3 py-1.5 text-xs text-left text-foreground hover:bg-secondary hover:text-primary transition-all font-medium flex items-center gap-2"
+          onClick={async (e) => {
+            e.stopPropagation();
+            // Optimistic: mark project done immediately
+            onOptimisticStatusChange?.(node.id, 'done');
+            try {
+              await updateNode(node.id, { status: 'done' });
+              onStatusChanged?.();
+            } catch (err) {
+              console.error('[SidebarTree] Failed to force-complete project', err);
+              // Rollback optimistic change
+              onOptimisticStatusChange?.(node.id, node.status);
+            }
+          }}
+        >
+          <CheckCircle2 className="w-3 h-3" />
+          Force Complete
+        </button>
+      ),
+    });
+
+    // Unforce (remove force-complete)
+    menuSections.push({
+      key: 'unforce-complete',
+      content: (
+        <button
+          className="w-full px-3 py-1.5 text-xs text-left text-foreground hover:bg-secondary hover:text-primary transition-all font-medium flex items-center gap-2"
+          onClick={async (e) => {
+            e.stopPropagation();
+            const prev = node.status;
+            // Optimistic: set to in_progress if previously done
+            if (prev === 'done') {
+              onOptimisticStatusChange?.(node.id, 'in_progress');
+            }
+            try {
+              await updateNode(node.id, { status: 'in_progress' });
+              onStatusChanged?.();
+            } catch (err) {
+              console.error('[SidebarTree] Failed to unforce-complete project', err);
+              // Rollback optimistic change
+              onOptimisticStatusChange?.(node.id, prev);
+            }
+          }}
+        >
+          <ChevronsDownUp className="w-3 h-3" />
+          Unforce Complete
+        </button>
+      ),
+    });
+  }
+
   if (onDelete) {
     menuSections.push({
       key: 'delete',
@@ -1066,12 +1175,10 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
           className={cn(
             'group flex items-center gap-2 py-2 px-2 rounded-lg cursor-pointer transition-all select-none',
             'sidebar-item-hover',
-            isSelected
-              ? 'sidebar-item-active pl-[9px] font-medium shadow-sm'
-              : 'border-l-3 border-transparent',
+            'border-l-3 border-transparent',
             isDragging && 'cursor-grabbing',
             isShiftDropTarget && 'ring-2 ring-primary',
-            isArchived && !isSelected && 'opacity-70',
+            isArchived && 'opacity-70',
           )}
           style={rowStyle}
           onClick={handleClick}
@@ -1096,15 +1203,75 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
           <div className="w-4" />
         )}
 
+        {/* Status dot for projects/tasks */}
+        {!node.is_task && (
+          <span
+            className={cn(
+              'mr-1 inline-block w-2 h-2 rounded-full',
+              node.status === 'done'
+                ? 'bg-emerald-500'
+                : node.status === 'in_progress'
+                ? 'bg-orange-500'
+                : node.status === 'archived'
+                ? 'bg-muted-foreground/50'
+                : 'bg-gray-400'
+            )}
+          />
+        )}
+
         {node.is_task ? (
-          <div className="w-4 h-4 flex items-center justify-center">
-            <span className={statusIndicator} />
-          </div>
+          <button
+            type="button"
+            className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-secondary/50"
+            title={
+              node.status === 'done'
+                ? 'Mark as Incomplete'
+                : node.status === 'in_progress'
+                ? 'Mark as Complete'
+                : node.status === 'archived'
+                ? 'Archived'
+                : 'Mark as In Progress'
+            }
+            onClick={async (e) => {
+              e.stopPropagation();
+              // Cycle through: todo -> in_progress -> done -> todo
+              const nextStatus =
+                node.status === 'todo'
+                  ? 'in_progress'
+                  : node.status === 'in_progress'
+                  ? 'done'
+                  : node.status === 'done'
+                  ? 'todo'
+                  : 'in_progress';
+              const prevStatus = node.status;
+              // Optimistic UI update
+              onOptimisticStatusChange?.(node.id, nextStatus);
+              try {
+                await updateNode(node.id, { status: nextStatus });
+                onStatusChanged?.();
+              } catch (err) {
+                console.error('[SidebarTree] Failed to toggle status', err);
+                // Rollback on failure
+                onOptimisticStatusChange?.(node.id, prevStatus);
+              }
+            }}
+          >
+            {node.status === 'done' ? (
+              <CheckCircle2 className="w-4 h-4 text-success" />
+            ) : node.status === 'in_progress' ? (
+              <CircleDot className="w-4 h-4 text-warning" />
+            ) : node.status === 'archived' ? (
+              <Circle className="w-4 h-4 text-muted-foreground/50" />
+            ) : (
+              <Circle className="w-4 h-4 text-muted-foreground" />
+            )}
+          </button>
         ) : isExpanded ? (
           <FolderOpen className={cn('w-4 h-4 flex-shrink-0', folderIconClass)} />
         ) : (
           <Folder className={cn('w-4 h-4 flex-shrink-0', folderIconClass)} />
         )}
+
 
         {isRenaming ? (
           <input
@@ -1132,6 +1299,16 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
               }}
             >
               {node.name}
+              {!node.is_task && daughterProjectCount > 0 && (
+                <span className="ml-2 text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground align-middle">
+                  {daughterProjectCount} sub-project{daughterProjectCount > 1 ? 's' : ''}
+                </span>
+              )}
+              {!node.is_task && childNodes.length > 0 && (
+                <span className="ml-2 text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground align-middle">
+                  Total {childNodes.length}
+                </span>
+              )}
             </span>
             {isArchived && (
               <span className="text-[10px] uppercase font-semibold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
@@ -1378,6 +1555,8 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
                       onSendToDailyQuest={onSendToDailyQuest}
                       onUpdateNotes={onUpdateNotes}
                       allNodes={allNodes}
+                      onStatusChanged={onStatusChanged}
+                      onOptimisticStatusChange={onOptimisticStatusChange}
                     />
                   ))}
                 </SortableContext>
@@ -1414,6 +1593,7 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
                 onSendToDailyQuest={onSendToDailyQuest}
                 onUpdateNotes={onUpdateNotes}
                 allNodes={allNodes}
+                onStatusChanged={onStatusChanged}
               />
             ))
           ) : (
@@ -1445,6 +1625,8 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
                   onSendToDailyQuest={onSendToDailyQuest}
                   onUpdateNotes={onUpdateNotes}
                   allNodes={allNodes}
+                  onStatusChanged={onStatusChanged}
+                  onOptimisticStatusChange={onOptimisticStatusChange}
                 />
               ))}
             </SortableContext>

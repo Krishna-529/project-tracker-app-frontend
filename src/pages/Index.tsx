@@ -894,6 +894,7 @@ const Index = () => {
                   openedProjectName={openedProjectName}
                   openedProjectId={openedProjectId}
                   hideBottomButton={true}
+                  onStatusChanged={() => { void refreshTree(); }}
                 />
               </div>
             </div>
