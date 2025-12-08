@@ -1299,16 +1299,6 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
               }}
             >
               {node.name}
-              {!node.is_task && daughterProjectCount > 0 && (
-                <span className="ml-2 text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground align-middle">
-                  {daughterProjectCount} sub-project{daughterProjectCount > 1 ? 's' : ''}
-                </span>
-              )}
-              {!node.is_task && childNodes.length > 0 && (
-                <span className="ml-2 text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground align-middle">
-                  Total {childNodes.length}
-                </span>
-              )}
             </span>
             {isArchived && (
               <span className="text-[10px] uppercase font-semibold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">

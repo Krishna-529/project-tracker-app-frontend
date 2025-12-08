@@ -204,6 +204,7 @@ const Index = () => {
           name: name || (parentId ? 'New Subproject' : 'New Project'),
           isTask: false,
           parentId: parentId ?? null,
+          status: 'todo',
         });
         toast.success('Project created');
         await refreshTree();

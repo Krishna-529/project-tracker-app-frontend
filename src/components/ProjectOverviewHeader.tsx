@@ -31,13 +31,23 @@ export function ProjectOverviewHeader({
   onEditDescription,
 }: ProjectOverviewHeaderProps) {
   const stats = useMemo(() => {
-    const total = allTasks.length;
-    const completed = allTasks.filter(task => task.status === 'done').length;
-    const inProgress = allTasks.filter(task => task.status === 'in_progress').length;
+    const childProjects = (project?.children ?? []).filter(c => !c.is_task);
+    const directSubProjects = childProjects.length;
+
+    const tasksCompleted = allTasks.filter(task => task.status === 'done').length;
+    const tasksInProgress = allTasks.filter(task => task.status === 'in_progress').length;
+
+    const projectsDone = childProjects.filter(p => p.status === 'done').length;
+    const projectsInProgress = childProjects.filter(p => p.status === 'in_progress').length;
+
+    const total = allTasks.length + directSubProjects;
+    const completed = tasksCompleted + projectsDone;
+    const inProgress = tasksInProgress + projectsInProgress;
+
     const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
 
     return { total, completed, inProgress, progress };
-  }, [allTasks]);
+  }, [allTasks, project]);
 
   if (!project) {
     return (
