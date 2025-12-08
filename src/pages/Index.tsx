@@ -763,9 +763,27 @@ const Index = () => {
             {/* Project Overview Header in Sidebar */}
             {activeProjectId != null && nodeMap.get(activeProjectId) && (
               <div className="p-4 border-b border-border/60">
+                {(() => {
+                  // Build unfiltered task list from the active project's full children
+                  const collectDescendants = (nodes: Node[] = []): Node[] => {
+                    const result: Node[] = [];
+                    const stack = [...nodes];
+                    while (stack.length) {
+                      const n = stack.pop()!;
+                      result.push(n);
+                      if (n.children && n.children.length) {
+                        stack.push(...n.children);
+                      }
+                    }
+                    return result;
+                  };
+                  const activeProject = nodeMap.get(activeProjectId)!;
+                  const allDesc = collectDescendants(activeProject.children ?? []);
+                  const allTasksUnfiltered = allDesc.filter(n => n.is_task);
+                  return (
                 <ProjectOverviewHeader
                   project={nodeMap.get(activeProjectId)!}
-                  allTasks={filteredNodes.filter(n => n.is_task)}
+                    allTasks={allTasksUnfiltered}
                   onRename={() => {
                     const newName = prompt('Enter new name:', nodeMap.get(activeProjectId)?.name);
                     if (newName) handleRename(activeProjectId, newName);
@@ -778,6 +796,8 @@ const Index = () => {
                   }}
                   onEditDescription={() => { void openMetaModal(); }}
                 />
+                  );
+                })()}
               </div>
             )}
             
@@ -863,7 +883,7 @@ const Index = () => {
               <div className="h-full border-l border-border/40">
                 {/* Project/Task Tree - Full Height */}
                 <SidebarTree
-                  nodes={displayNodes}
+                  nodes={filteredNodes}
                   allProjects={rootNodes}
                   selectedId={selection?.id ?? null}
                   onSelect={handleSelect}

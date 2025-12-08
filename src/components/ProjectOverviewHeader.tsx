@@ -43,7 +43,6 @@ export function ProjectOverviewHeader({
     const total = allTasks.length + directSubProjects;
     const completed = tasksCompleted + projectsDone;
     const inProgress = tasksInProgress + projectsInProgress;
-
     const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
 
     return { total, completed, inProgress, progress };
