@@ -982,7 +982,7 @@ const Index = () => {
                             className="w-full px-3 py-1.5 text-left text-xs hover:bg-accent/10 transition-colors flex items-center gap-2 cursor-pointer"
                           >
                             <Plus className="w-3 h-3" />
-                            Add Module
+                            New Module
                           </button>
                         </div>
                       </div>
@@ -1038,7 +1038,7 @@ const Index = () => {
                         'border border-border/60 hover:border-border',
                       )}
                     >
-                      <span className="font-medium">Add Task</span>
+                      <span className="font-medium">New Task</span>
                     </button>
                   )}
                 </div>

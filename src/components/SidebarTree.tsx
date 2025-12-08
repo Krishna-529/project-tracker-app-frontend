@@ -952,7 +952,7 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
             }}
           >
             <Plus className="w-3 h-3" />
-            Add Module
+            New Module
           </button>
           {onAddTask && (
             <>
@@ -965,7 +965,7 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
                 }}
               >
                 <Plus className="w-3 h-3" />
-                Add Task
+                New Task
               </button>
             </>
           )}
@@ -1048,59 +1048,55 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
     });
   }
 
-  // Project force-complete / unforce
+  // Project mark complete / incomplete
   if (!node.is_task && !isArchived) {
-    // Force Complete
+    // Mark Complete
     menuSections.push({
-      key: 'force-complete',
+      key: 'mark-complete',
       content: (
         <button
           className="w-full px-3 py-1.5 text-xs text-left text-foreground hover:bg-secondary hover:text-primary transition-all font-medium flex items-center gap-2"
           onClick={async (e) => {
             e.stopPropagation();
-            // Optimistic: mark project done immediately
             onOptimisticStatusChange?.(node.id, 'done');
             try {
               await updateNode(node.id, { status: 'done' });
               onStatusChanged?.();
             } catch (err) {
-              console.error('[SidebarTree] Failed to force-complete project', err);
-              // Rollback optimistic change
+              console.error('[SidebarTree] Failed to mark complete', err);
               onOptimisticStatusChange?.(node.id, node.status);
             }
           }}
         >
           <CheckCircle2 className="w-3 h-3" />
-          Force Complete
+          Mark Complete
         </button>
       ),
     });
 
-    // Unforce (remove force-complete)
+    // Mark Incomplete
     menuSections.push({
-      key: 'unforce-complete',
+      key: 'mark-incomplete',
       content: (
         <button
           className="w-full px-3 py-1.5 text-xs text-left text-foreground hover:bg-secondary hover:text-primary transition-all font-medium flex items-center gap-2"
           onClick={async (e) => {
             e.stopPropagation();
             const prev = node.status;
-            // Optimistic: set to in_progress if previously done
-            if (prev === 'done') {
-              onOptimisticStatusChange?.(node.id, 'in_progress');
+            if (prev !== 'todo') {
+              onOptimisticStatusChange?.(node.id, 'todo');
             }
             try {
-              await updateNode(node.id, { status: 'in_progress' });
+              await updateNode(node.id, { status: 'todo' });
               onStatusChanged?.();
             } catch (err) {
-              console.error('[SidebarTree] Failed to unforce-complete project', err);
-              // Rollback optimistic change
+              console.error('[SidebarTree] Failed to mark incomplete', err);
               onOptimisticStatusChange?.(node.id, prev);
             }
           }}
         >
-          <ChevronsDownUp className="w-3 h-3" />
-          Unforce Complete
+          <Circle className="w-3 h-3" />
+          Mark Incomplete
         </button>
       ),
     });
