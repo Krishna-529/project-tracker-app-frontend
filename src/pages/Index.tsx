@@ -201,7 +201,7 @@ const Index = () => {
     async (parentId?: number, name?: string) => {
       try {
         await createNode({
-          name: name || (parentId ? 'New Subproject' : 'New Project'),
+          name: name || (parentId ? 'New Module' : 'New Project'),
           isTask: false,
           parentId: parentId ?? null,
           status: 'todo',
@@ -982,7 +982,7 @@ const Index = () => {
                             className="w-full px-3 py-1.5 text-left text-xs hover:bg-accent/10 transition-colors flex items-center gap-2 cursor-pointer"
                           >
                             <Plus className="w-3 h-3" />
-                            Add Project
+                            Add Module
                           </button>
                         </div>
                       </div>
@@ -1020,7 +1020,7 @@ const Index = () => {
                           setShowAddProjectInput(false);
                           setNewProjectName('');
                         }}
-                        placeholder="Enter project name..."
+                        placeholder="Enter module name..."
                         className={cn(
                           'flex-1 text-sm bg-background border border-primary/50 rounded-lg px-4 py-3',
                           'focus:outline-none focus:border-primary transition-colors',

@@ -119,7 +119,7 @@ export function ProjectOverviewHeader({
           <DropdownMenuContent align="end" className="w-48">
             {onRename && (
               <DropdownMenuItem onClick={onRename}>
-                <span>Rename Project</span>
+                <span>Rename {project.parent_id == null ? 'Project' : 'Module'}</span>
               </DropdownMenuItem>
             )}
             {onArchive && (
@@ -127,7 +127,7 @@ export function ProjectOverviewHeader({
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={onArchive}>
                   <span>
-                    {project.status === 'archived' ? 'Restore Project' : 'Archive Project'}
+                    {project.status === 'archived' ? `Restore ${project.parent_id == null ? 'Project' : 'Module'}` : `Archive ${project.parent_id == null ? 'Project' : 'Module'}`}
                   </span>
                 </DropdownMenuItem>
               </>
@@ -136,7 +136,7 @@ export function ProjectOverviewHeader({
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={onDelete} className="text-destructive">
-                  <span>Delete Project</span>
+                  <span>Delete {project.parent_id == null ? 'Project' : 'Module'}</span>
                 </DropdownMenuItem>
               </>
             )}

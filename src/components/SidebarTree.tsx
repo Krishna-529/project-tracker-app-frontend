@@ -952,7 +952,7 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
             }}
           >
             <Plus className="w-3 h-3" />
-            Add Project
+            Add Module
           </button>
           {onAddTask && (
             <>
@@ -1389,7 +1389,7 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {node.is_task ? 'Task' : 'Project'}?</AlertDialogTitle>
+            <AlertDialogTitle>Delete {node.is_task ? 'Task' : (node.parent_id == null ? 'Project' : 'Module')}?</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete "{node.name}"?
               {!node.is_task && (node.children?.length ?? 0) > 0 && (
@@ -1420,9 +1420,9 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
       <Dialog open={showDeadlineDialog} onOpenChange={setShowDeadlineDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{node.deadline ? 'Change project deadline' : 'Set project deadline'}</DialogTitle>
+            <DialogTitle>{node.deadline ? `Change ${node.is_task ? 'task' : (node.parent_id == null ? 'project' : 'module')} deadline` : `Set ${node.is_task ? 'task' : (node.parent_id == null ? 'project' : 'module')} deadline`}</DialogTitle>
             <DialogDescription>
-              Pick a date to track this project's deadline. Leave blank to keep it unset.
+              Pick a date to track this {node.is_task ? 'task' : (node.parent_id == null ? 'project' : 'module')}'s deadline. Leave blank to keep it unset.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">
@@ -1644,7 +1644,7 @@ function TreeNode({ node, parentId, selectedId, onSelect, onAddProject, onAddTas
                     }
                   }}
                   onKeyDown={handleAddKeyDown}
-                  placeholder={`${addInputType === 'project' ? 'Project' : 'Task'} name...`}
+                  placeholder={`${addInputType === 'project' ? 'Module' : 'Task'} name...`}
                   className="flex-1 text-sm bg-background border border-border/40 rounded-lg px-3 py-1.5 focus:outline-none focus:border-primary/50 transition-colors"
                   onClick={(e) => e.stopPropagation()}
                 />
