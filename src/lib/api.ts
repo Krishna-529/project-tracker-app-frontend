@@ -2,7 +2,7 @@ import type { NodeStatus } from '@/types/node';
 
 const DEFAULT_API_BASE_URL = 'http://localhost:3000/api/v1';
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '')
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '')
   ?? DEFAULT_API_BASE_URL;
 
 export interface ApiNode {

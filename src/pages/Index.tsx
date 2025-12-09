@@ -10,7 +10,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { ProjectOverviewHeader } from '@/components/ProjectOverviewHeader';
 import { SearchBar, type SearchFilters } from '@/components/SearchBar';
 import { useKeyboardShortcuts, KeyboardShortcutsHelp } from '@/hooks/use-keyboard-shortcuts';
-import { fetchNodeTree, createNode, updateNode, reorderNodes as reorderNodesApi, moveNode as moveNodeApi, deleteNode, fetchNodeById } from '@/lib/api';
+import { fetchNodeTree, createNode, updateNode, reorderNodes as reorderNodesApi, moveNode as moveNodeApi, deleteNode, fetchNodeById, sendToDailyQuest, logout, API_BASE_URL } from '@/lib/api';
 import { buildNodeTree } from '@/lib/nodeTree';
 import { cn } from '@/lib/utils';
 import type { Node } from '@/types/node';
@@ -335,17 +335,7 @@ const Index = () => {
     async (nodeId: number) => {
       try {
         console.log('[Frontend] Sending task to Daily Quest:', nodeId);
-        const response = await fetch(`http://localhost:3000/api/v1/integrations/daily-quest/${nodeId}`, {
-          method: 'POST',
-          credentials: 'include',
-        });
-        
-        if (!response.ok) {
-          const error = await response.json().catch(() => ({ message: 'Failed to send task' }));
-          throw new Error(error.message || 'Failed to send task');
-        }
-        
-        const result = await response.json();
+        const result = await sendToDailyQuest(nodeId);
         console.log('[Frontend] Daily Quest response:', result);
         toast.success(`Task ${result.message || 'sent to Daily Quest'}`);
       } catch (err) {
@@ -706,10 +696,7 @@ const Index = () => {
               <button
                 onClick={async () => {
                   try {
-                    await fetch('http://localhost:3000/api/v1/auth/logout', {
-                      method: 'POST',
-                      credentials: 'include',
-                    });
+                    await logout();
                     window.location.href = '/login';
                   } catch (error) {
                     toast.error('Failed to logout');
@@ -779,10 +766,7 @@ const Index = () => {
                     <DropdownMenuItem
                       onClick={async () => {
                         try {
-                          await fetch('http://localhost:3000/api/v1/auth/logout', {
-                            method: 'POST',
-                            credentials: 'include',
-                          });
+                          await logout();
                           window.location.href = '/login';
                         } catch (error) {
                           toast.error('Failed to logout');

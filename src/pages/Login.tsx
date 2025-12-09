@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { getGoogleAuthUrl, getMe } from '@/lib/api';
+import { getGoogleAuthUrl, getMe, API_BASE_URL } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
@@ -38,7 +38,7 @@ export default function Login() {
         setLoading(true);
         try {
           console.log('[FRONTEND AUTH] Calling backend callback endpoint...');
-          const response = await fetch(`http://localhost:3000/api/v1/auth/google/callback?code=${code}`, {
+          const response = await fetch(`${API_BASE_URL}/auth/google/callback?code=${code}`, {
             credentials: 'include',
           });
           console.log('[FRONTEND AUTH] Backend response status:', response.status);
