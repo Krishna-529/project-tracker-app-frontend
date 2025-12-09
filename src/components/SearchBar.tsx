@@ -78,16 +78,16 @@ export function SearchBar({ value, onChange, filters = {}, onFiltersChange, plac
   const activeFilterCount = (filters.status ? 1 : 0) + (filters.hasDeadline !== undefined ? 1 : 0);
 
   return (
-    <div className="relative">
+    <div className="relative w-full min-w-0">
       <div
         className={cn(
-          'flex items-center gap-2 px-3.5 h-10 w-[420px] bg-card border rounded-xl transition-all duration-200',
+          'flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3.5 h-10 w-full sm:w-[420px] bg-card border rounded-xl transition-all duration-200',
           isFocused
             ? 'border-primary ring-2 ring-primary/20 shadow-sm'
             : 'border-border/40 hover:border-primary/50',
         )}
       >
-        <Search className={cn('w-4 h-4 transition-colors', isFocused ? 'text-primary' : 'text-muted-foreground')} />
+        <Search className={cn('w-4 h-4 flex-shrink-0 transition-colors', isFocused ? 'text-primary' : 'text-muted-foreground')} />
 
         <input
           ref={inputRef}
@@ -106,7 +106,7 @@ export function SearchBar({ value, onChange, filters = {}, onFiltersChange, plac
             setTimeout(() => setShowRecent(false), 200);
           }}
           placeholder={placeholder}
-          className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+          className="flex-1 min-w-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
         />
 
         {value && (
@@ -115,7 +115,7 @@ export function SearchBar({ value, onChange, filters = {}, onFiltersChange, plac
               onChange('');
               inputRef.current?.focus();
             }}
-            className="p-1 hover:bg-secondary rounded transition-colors"
+            className="p-1 hover:bg-secondary rounded transition-colors flex-shrink-0"
           >
             <X className="w-3 h-3 text-muted-foreground" />
           </button>
@@ -125,7 +125,7 @@ export function SearchBar({ value, onChange, filters = {}, onFiltersChange, plac
           <DropdownMenuTrigger asChild>
             <button
               className={cn(
-                'p-1 rounded transition-colors relative',
+                'p-1 rounded transition-colors relative flex-shrink-0',
                 activeFilterCount > 0 ? 'bg-primary/10 text-primary' : 'hover:bg-secondary text-muted-foreground',
               )}
             >

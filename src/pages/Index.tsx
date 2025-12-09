@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { LayoutGrid, PanelLeft, PanelLeftClose, Plus, RefreshCw, Search, ExternalLink } from 'lucide-react';
+import { LayoutGrid, PanelLeft, PanelLeftClose, Plus, RefreshCw, Search, ExternalLink, MoreVertical, LogOut, Sun, Moon, HelpCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { TreeContainer } from '@/components/ProjectTree/TreeContainer';
@@ -9,7 +9,6 @@ import { SidebarTree } from '@/components/SidebarTree';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { ProjectOverviewHeader } from '@/components/ProjectOverviewHeader';
 import { SearchBar, type SearchFilters } from '@/components/SearchBar';
-import { ViewsDropdown, type ViewMode } from '@/components/ViewsDropdown';
 import { useKeyboardShortcuts, KeyboardShortcutsHelp } from '@/hooks/use-keyboard-shortcuts';
 import { fetchNodeTree, createNode, updateNode, reorderNodes as reorderNodesApi, moveNode as moveNodeApi, deleteNode, fetchNodeById } from '@/lib/api';
 import { buildNodeTree } from '@/lib/nodeTree';
@@ -71,7 +70,6 @@ function filterNodes(nodes: Node[], query: string, filters: SearchFilters = {}) 
 const Index = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFilters, setSearchFilters] = useState<SearchFilters>({});
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [isExplorerOpen, setIsExplorerOpen] = useState<boolean>(() => {
     try {
       const saved = window.localStorage.getItem('ui:isExplorerOpen');
@@ -601,19 +599,12 @@ const Index = () => {
         ? nodeMap.get(activeProjectId)?.children ?? []
         : rootNodes;
 
-    // Apply view mode filters
-    if (viewMode === 'completed') {
-      baseNodes = baseNodes.filter(node => node.status === 'done' || node.status === 'archived');
-    } else if (viewMode === 'pending') {
-      baseNodes = baseNodes.filter(node => node.status === 'todo' || node.status === 'in_progress');
-    }
-
     if (!searchQuery.trim() && Object.keys(searchFilters).length === 0) {
       return baseNodes;
     }
 
     return filterNodes(baseNodes, searchQuery, searchFilters);
-  }, [activeProjectId, nodeMap, rootNodes, searchQuery, searchFilters, viewMode]);
+  }, [activeProjectId, nodeMap, rootNodes, searchQuery, searchFilters]);
 
   const displayNodes = useMemo(() => {
     if (openedProjectId != null) {
@@ -652,9 +643,9 @@ const Index = () => {
     <div className="h-screen flex flex-col overflow-hidden">
       {/* Header */}
       <header className="navbar-container flex-shrink-0 z-50 h-16">
-        <div className="h-full px-6 flex items-center justify-between gap-4">
+        <div className="h-full px-3 md:px-6 flex items-center justify-between gap-2 md:gap-4">
           {/* Left: Logo + Title */}
-          <div className="flex items-center gap-3 min-w-[320px]">
+          <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
             <button
               onClick={() => setIsExplorerOpen(!isExplorerOpen)}
               className={cn(
@@ -670,96 +661,159 @@ const Index = () => {
               )}
             </button>
 
-            <div className="app-logo text-lg">
-              K
-            </div>
-
-            <h1 className="text-lg font-semibold text-primary tracking-tight">Project Tracker</h1>
+            <button
+              onClick={handleResetScope}
+              className="text-base md:text-lg font-semibold text-primary tracking-tight hover:text-primary/80 transition-colors cursor-pointer whitespace-nowrap"
+              title="Go to home page"
+            >
+              Project Tracker
+            </button>
           </div>
 
           {/* Center/Right: Search + Actions */}
-          <div className="flex items-center gap-3 ml-auto">
-            {/* Enhanced Search bar */}
-            <SearchBar
-              value={searchQuery}
-              onChange={setSearchQuery}
-              filters={searchFilters}
-              onFiltersChange={setSearchFilters}
-            />
+          <div className="flex items-center gap-2 md:gap-3 ml-auto flex-shrink min-w-0">
+            {/* Enhanced Search bar - Always visible, responsive width */}
+            <div className="flex-shrink min-w-0 w-full sm:w-auto sm:flex-none max-w-[160px] sm:max-w-none">
+              <SearchBar
+                value={searchQuery}
+                onChange={setSearchQuery}
+                filters={searchFilters}
+                onFiltersChange={setSearchFilters}
+              />
+            </div>
 
-            {/* Actions */}
+            {/* Status Messages */}
             {(loading || pendingReorderCount > 0) && (
-              <span className="text-xs text-muted-foreground">
+              <span className="hidden lg:inline text-xs text-muted-foreground">
                 {pendingReorderCount > 0 ? 'Reordering…' : 'Syncing…'}
               </span>
             )}
-            {error && <span className="text-xs text-destructive">{error}</span>}
-            <ThemeToggle />
-            <button
-              onClick={() => void refreshTree()}
-              className={cn(
-                'p-1.5 text-muted-foreground hover:text-accent hover:bg-secondary/50',
-                'rounded-md transition-all border border-transparent hover:border-accent/30',
-              )}
-              title="Refresh"
-            >
-              <RefreshCw className={cn('w-5 h-5', loading && 'animate-spin')} />
-            </button>
-            <button
-              onClick={handleResetScope}
-              className={cn(
-                'px-3 py-1.5 text-sm font-medium',
-                'text-muted-foreground hover:text-primary hover:bg-secondary/50',
-                'rounded-md transition-all scale-press border border-transparent hover:border-primary/30',
-              )}
-            >
-              All Projects
-            </button>
+            {error && <span className="hidden lg:inline text-xs text-destructive">{error}</span>}
+            
+            {/* Desktop Actions - Hidden on small screens */}
+            <div className="hidden md:flex items-center gap-3">
+              <ThemeToggle />
+              <button
+                onClick={() => void refreshTree()}
+                className={cn(
+                  'p-1.5 text-muted-foreground hover:text-accent hover:bg-secondary/50',
+                  'rounded-md transition-all border border-transparent hover:border-accent/30',
+                )}
+                title="Refresh"
+              >
+                <RefreshCw className={cn('w-5 h-5', loading && 'animate-spin')} />
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    await fetch('http://localhost:3000/api/v1/auth/logout', {
+                      method: 'POST',
+                      credentials: 'include',
+                    });
+                    window.location.href = '/login';
+                  } catch (error) {
+                    toast.error('Failed to logout');
+                  }
+                }}
+                className={cn(
+                  'px-4 py-1.5 text-sm font-medium',
+                  'text-orange-600 dark:text-orange-500 hover:text-orange-700 dark:hover:text-orange-400',
+                  'bg-orange-500/10 hover:bg-orange-500/20',
+                  'rounded-full transition-all',
+                  'border border-orange-500/30 hover:border-orange-500/50',
+                )}
+              >
+                Logout
+              </button>
 
-            <button
-              onClick={async () => {
-                try {
-                  await fetch('http://localhost:3000/api/v1/auth/logout', {
-                    method: 'POST',
-                    credentials: 'include',
-                  });
-                  window.location.href = '/login';
-                } catch (error) {
-                  toast.error('Failed to logout');
-                }
-              }}
-              className={cn(
-                'px-4 py-1.5 text-sm font-medium',
-                'text-orange-600 dark:text-orange-500 hover:text-orange-700 dark:hover:text-orange-400',
-                'bg-orange-500/10 hover:bg-orange-500/20',
-                'rounded-full transition-all',
-                'border border-orange-500/30 hover:border-orange-500/50',
-              )}
-            >
-              Logout
-            </button>
+              <button
+                onClick={() => setShowShortcuts(true)}
+                className={cn(
+                  'p-1.5 text-muted-foreground hover:text-accent hover:bg-secondary/50',
+                  'rounded-md transition-all border border-transparent hover:border-accent/30',
+                )}
+                title="Keyboard shortcuts (Shift+?)"
+              >
+                <span className="text-xs font-bold">?</span>
+              </button>
+            </div>
 
-            <ViewsDropdown currentView={viewMode} onViewChange={setViewMode} />
-
-            <button
-              onClick={() => setShowShortcuts(true)}
-              className={cn(
-                'p-1.5 text-muted-foreground hover:text-accent hover:bg-secondary/50',
-                'rounded-md transition-all border border-transparent hover:border-accent/30',
-              )}
-              title="Keyboard shortcuts (Shift+?)"
-            >
-              <span className="text-xs font-bold">?</span>
-            </button>
+            {/* Mobile Menu Dropdown - Visible only on small screens */}
+            <div className="md:hidden">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className={cn(
+                      'p-2 text-muted-foreground hover:text-primary',
+                      'hover:bg-secondary/50 rounded-lg transition-all',
+                    )}
+                    title="Menu"
+                  >
+                    <MoreVertical className="w-5 h-5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuPortal>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem onClick={() => void refreshTree()} className="cursor-pointer">
+                      <RefreshCw className={cn('w-4 h-4 mr-2', loading && 'animate-spin')} />
+                      Refresh
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setShowShortcuts(true)} className="cursor-pointer">
+                      <HelpCircle className="w-4 h-4 mr-2" />
+                      Shortcuts
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        const currentTheme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+                        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+                        localStorage.setItem('theme', newTheme);
+                        document.documentElement.classList.toggle('dark', newTheme === 'dark');
+                      }}
+                      className="cursor-pointer"
+                    >
+                      <Sun className="w-4 h-4 mr-2 dark:hidden" />
+                      <Moon className="w-4 h-4 mr-2 hidden dark:block" />
+                      <span className="dark:hidden">Dark Mode</span>
+                      <span className="hidden dark:inline">Light Mode</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={async () => {
+                        try {
+                          await fetch('http://localhost:3000/api/v1/auth/logout', {
+                            method: 'POST',
+                            credentials: 'include',
+                          });
+                          window.location.href = '/login';
+                        } catch (error) {
+                          toast.error('Failed to logout');
+                        }
+                      }}
+                      className="cursor-pointer text-orange-600 dark:text-orange-500"
+                    >
+                      <LogOut className="w-4 h-4 mr-2" />
+                      Logout
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenuPortal>
+              </DropdownMenu>
+            </div>
           </div>
         </div>
       </header>
 
       {/* Main content with explorer */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Explorer Panel */}
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Backdrop for mobile when sidebar is open - transparent, just for closing */}
         {isExplorerOpen && (
-          <aside className="sidebar-container w-80 border-r border-border/60 flex flex-col overflow-hidden">
+          <div 
+            className="fixed inset-0 top-16 z-30 lg:hidden"
+            onClick={() => setIsExplorerOpen(false)}
+          />
+        )}
+        
+        {/* Left Explorer Panel - Overlay on mobile, inline on desktop */}
+        {isExplorerOpen && (
+          <aside className="sidebar-container fixed lg:relative top-16 lg:top-0 left-0 bottom-0 z-40 w-full sm:w-96 lg:w-80 border-r border-border/60 flex flex-col overflow-hidden shadow-2xl lg:shadow-none">
             {/* Project Overview Header in Sidebar */}
             {activeProjectId != null && nodeMap.get(activeProjectId) && (
               <div className="p-4 border-b border-border/60">
