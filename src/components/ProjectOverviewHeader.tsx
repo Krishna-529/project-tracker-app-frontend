@@ -74,7 +74,7 @@ export function ProjectOverviewHeader({
   }
 
   return (
-    <div className="mb-6 p-6 bg-card rounded-lg border border-border shadow-sm animate-fade-in">
+    <div className="mb-6 p-6 bg-card rounded-lg border border-border shadow-sm animate-fade-in project-overview-card">
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
           <h1 className="text-3xl font-bold text-foreground">{project.name}</h1>

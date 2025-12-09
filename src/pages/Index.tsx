@@ -556,22 +556,20 @@ const Index = () => {
   }, [handleSubmitNewTask]);
 
   // Keyboard shortcuts
-  useKeyboardShortcuts([
+  const shortcuts = [
     {
       key: 'n',
-      modifiers: [],
       action: handleCreateTaskClick,
       description: 'Create new task in active project',
     },
     {
       key: 'p',
-      modifiers: ['Shift'],
+      shiftKey: true,
       action: () => handleAddProject(),
       description: 'Create new project',
     },
     {
       key: 'Delete',
-      modifiers: [],
       action: () => {
         if (selection?.id) {
           void handleDelete(selection.id);
@@ -581,7 +579,7 @@ const Index = () => {
     },
     {
       key: 'f',
-      modifiers: ['Control'],
+      ctrlKey: true,
       action: () => {
         document.querySelector<HTMLInputElement>('input[type="text"]')?.focus();
       },
@@ -589,11 +587,13 @@ const Index = () => {
     },
     {
       key: '?',
-      modifiers: ['Shift'],
+      shiftKey: true,
       action: () => setShowShortcuts((prev) => !prev),
       description: 'Toggle keyboard shortcuts help',
     },
-  ]);
+  ];
+  
+  useKeyboardShortcuts(shortcuts);
 
   const filteredNodes = useMemo(() => {
     let baseNodes =
@@ -674,7 +674,7 @@ const Index = () => {
               K
             </div>
 
-            <h1 className="text-lg font-semibold text-foreground tracking-tight">Project Tracker</h1>
+            <h1 className="text-lg font-semibold text-primary tracking-tight">Project Tracker</h1>
           </div>
 
           {/* Center/Right: Search + Actions */}
@@ -730,10 +730,10 @@ const Index = () => {
               }}
               className={cn(
                 'px-4 py-1.5 text-sm font-medium',
-                'text-destructive hover:text-destructive/80',
-                'bg-destructive/5 hover:bg-destructive/10',
+                'text-orange-600 dark:text-orange-500 hover:text-orange-700 dark:hover:text-orange-400',
+                'bg-orange-500/10 hover:bg-orange-500/20',
                 'rounded-full transition-all',
-                'border border-destructive/20 hover:border-destructive/30',
+                'border border-orange-500/30 hover:border-orange-500/50',
               )}
             >
               Logout
@@ -811,9 +811,9 @@ const Index = () => {
             <div className="h-full px-9 py-7">
               {/* Breadcrumb + Actions in main content */}
               <div className="mb-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-bold text-primary tracking-wide">
-                    <div className="flex flex-wrap items-center gap-1.5 w-full">
+                <div className="flex items-center gap-3">
+                  <div className="text-xs text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-1">
                     {(() => {
                       const segments: { id: number | null; name: string }[] = [];
                       segments.push({ id: null, name: 'All Projects' });
@@ -829,12 +829,13 @@ const Index = () => {
                         const clickable = seg.id === null ? openedProjectId != null : !isLast;
                         return (
                           <span key={seg.id ?? 'root'} className="inline-flex items-center">
-                            {idx > 0 && <span className="px-1 text-primary/50">/</span>}
+                            {idx > 0 && <span className="px-1 text-muted-foreground/50">/</span>}
                             {clickable ? (
                               <button
                                 className={cn(
-                                  isLast ? 'whitespace-normal break-words' : 'truncate max-w-[220px]',
-                                  'text-left hover:text-accent underline-offset-2 hover:underline'
+                                  'text-muted-foreground hover:text-primary transition-colors',
+                                  isLast ? 'max-w-[300px]' : 'max-w-[150px]',
+                                  'truncate'
                                 )}
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -849,7 +850,11 @@ const Index = () => {
                                 {seg.name}
                               </button>
                             ) : (
-                              <span className={cn(isLast ? 'whitespace-normal break-words' : 'truncate max-w-[220px]')} title={seg.name}>
+                              <span className={cn(
+                                'text-foreground font-medium',
+                                isLast ? 'max-w-[300px]' : 'max-w-[150px]',
+                                'truncate'
+                              )} title={seg.name}>
                                 {seg.name}
                               </span>
                             )}
@@ -858,18 +863,18 @@ const Index = () => {
                       });
                     })()}
                     </div>
-                  </h2>
+                  </div>
 
-                  {/* Top-right meta description icon (green area) */}
+                  {/* Notes button inline with breadcrumb */}
                   {openedProjectId != null && (
                     <button
                       onClick={() => { void openMetaModal(); }}
-                      className="p-2 rounded-md border border-border/60 hover:border-border bg-card hover:bg-accent/5 text-muted-foreground hover:text-foreground"
+                      className="p-1.5 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
                       title="Notes"
                       aria-label="Notes"
                     >
                       {/* document icon */}
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                         <path d="M14 2v6h6"/>
                         <path d="M16 13H8"/>
@@ -1103,7 +1108,7 @@ const Index = () => {
                 ✕
               </button>
             </div>
-            <KeyboardShortcutsHelp />
+            <KeyboardShortcutsHelp shortcuts={shortcuts} />
           </div>
         </div>
       )}

@@ -83,11 +83,11 @@ export function SearchBar({ value, onChange, filters = {}, onFiltersChange, plac
         className={cn(
           'flex items-center gap-2 px-3.5 h-10 w-[420px] bg-card border rounded-xl transition-all duration-200',
           isFocused
-            ? 'border-accent ring-2 ring-accent/20 shadow-sm'
-            : 'border-border/40 hover:border-accent/50',
+            ? 'border-primary ring-2 ring-primary/20 shadow-sm'
+            : 'border-border/40 hover:border-primary/50',
         )}
       >
-        <Search className={cn('w-4 h-4 transition-colors', isFocused ? 'text-accent' : 'text-muted-foreground')} />
+        <Search className={cn('w-4 h-4 transition-colors', isFocused ? 'text-primary' : 'text-muted-foreground')} />
 
         <input
           ref={inputRef}
@@ -126,12 +126,12 @@ export function SearchBar({ value, onChange, filters = {}, onFiltersChange, plac
             <button
               className={cn(
                 'p-1 rounded transition-colors relative',
-                activeFilterCount > 0 ? 'bg-accent/10 text-accent' : 'hover:bg-secondary text-muted-foreground',
+                activeFilterCount > 0 ? 'bg-primary/10 text-primary' : 'hover:bg-secondary text-muted-foreground',
               )}
             >
               <Filter className="w-4 h-4" />
               {activeFilterCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-accent text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-white text-[10px] font-bold rounded-full flex items-center justify-center">
                   {activeFilterCount}
                 </span>
               )}

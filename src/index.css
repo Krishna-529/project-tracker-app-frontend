@@ -100,81 +100,91 @@ All colors MUST be HSL.
   }
 
   .dark {
-    /* ===== DARK MODE: "Deep Focus Theme" ===== */
+    /* ===== DARK MODE: Pure Black Theme (Screenshot Match) ===== */
     
-    /* Base surfaces - Void Grey (#09090b) */
-    --background: 240 10% 4%;
-    --foreground: 210 20% 96%; /* Mist White (#f4f4f5) */
+    /* Pure black backgrounds matching screenshot */
+    --background: 0 0% 7%; /* Very dark grey-black (#121212) */
+    --foreground: 0 0% 95%; /* Off-white text */
     
-    /* Card/Surface - Surface Grey (#18181b) */
-    --card: 240 6% 10%;
-    --card-foreground: 210 20% 96%;
+    /* Navbar - Pure black */
+    --navbar: 0 0% 7%;
+    
+    /* Sidebar - Same as background */
+    --sidebar: 0 0% 7%;
+    
+    /* Card - Slightly lighter with visible borders */
+    --card: 0 0% 10%;
+    --card-foreground: 0 0% 95%;
     
     /* Popover */
-    --popover: 240 6% 10%;
-    --popover-foreground: 210 20% 96%;
+    --popover: 0 0% 10%;
+    --popover-foreground: 0 0% 95%;
     
-    /* Primary Accent - Electric Indigo (#6366f1) */
-    --primary: 239 84% 67%;
-    --primary-foreground: 0 0% 100%;
+    /* Primary - Orange/amber from screenshot */
+    --primary: 30 100% 60%; /* Orange tone matching the title and "Active" */
+    --primary-foreground: 0 0% 0%;
     
-    /* Secondary surfaces - Ghost Grey (#27272a) */
-    --secondary: 240 4% 16%;
-    --secondary-foreground: 210 20% 96%;
+    /* Secondary surfaces */
+    --secondary: 0 0% 15%;
+    --secondary-foreground: 0 0% 95%;
     
-    /* Muted text and surfaces */
-    --muted: 240 4% 16%;
-    --muted-foreground: 215 14% 67%; /* Metal Grey (#a1a1aa) */
+    /* Muted */
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 55%;
     
-    /* Accent states */
-    --accent: 239 84% 67%;
+    /* Accent - Vibrant teal/cyan from "Done" card and progress bar */
+    --accent: 174 72% 56%; /* Brighter, more vibrant teal */
     --accent-foreground: 0 0% 100%;
     
-    /* Success - Emerald (#10b981) */
-    --success: 160 84% 39%;
+    /* Success - Vibrant teal from screenshot (more colorful) */
+    --success: 174 72% 56%; /* Brighter teal matching the Done card */
     --success-foreground: 0 0% 100%;
     
-    /* Warning - Amber (#f59e0b) */
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 100%;
+    /* Warning - Orange matching screenshot */
+    --warning: 30 100% 60%;
+    --warning-foreground: 0 0% 0%;
+    
+    /* Progress - Uses accent teal */
+    --progress: 174 62% 47%;
+    --progress-foreground: 0 0% 100%;
     
     /* Destructive */
     --destructive: 0 63% 31%;
-    --destructive-foreground: 210 20% 96%;
+    --destructive-foreground: 0 0% 95%;
     
-    /* Borders - Edge Grey (#27272a) */
-    --border: 240 4% 16%;
-    --input: 240 4% 16%;
-    --ring: 239 84% 67%;
+    /* Borders - Subtle grey for card outlines */
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 30 100% 60%;
     
     /* Tree guide lines */
-    --guide-line: 240 4% 16%;
+    --guide-line: 0 0% 20%;
     
-    /* Hover states - Ghost Grey with 50% opacity */
-    --hover-surface: 240 4% 16%;
+    /* Hover states */
+    --hover-surface: 0 0% 15%;
     
     /* Active/Focus glow */
-    --glow: 239 84% 67%;
+    --glow: 30 100% 60%;
 
-    /* Tag badge - Dark Indigo (#312e81) */
-    --tag-bg: 239 67% 19%;
-    --tag-fg: 239 84% 67%;
+    /* Tag badge */
+    --tag-bg: 30 100% 20%;
+    --tag-fg: 30 100% 60%;
 
     /* Notebook-style explorer tokens */
-    --separator: 240 4% 16%;
-    --hover-bg: 240 5% 12%;
-    --selected-border: 239 84% 67%;
-    --text-secondary: 215 14% 67%;
+    --separator: 0 0% 20%;
+    --hover-bg: 0 0% 15%;
+    --selected-border: 30 100% 60%;
+    --text-secondary: 0 0% 55%;
 
     /* Sidebar palette */
-    --sidebar-background: 240 6% 10%;
-    --sidebar-foreground: 210 20% 96%;
-    --sidebar-primary: 239 84% 67%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 4% 16%;
-    --sidebar-accent-foreground: 210 20% 96%;
-    --sidebar-border: 240 4% 16%;
-    --sidebar-ring: 239 84% 67%;
+    --sidebar-background: 0 0% 7%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 30 100% 60%;
+    --sidebar-primary-foreground: 0 0% 0%;
+    --sidebar-accent: 0 0% 15%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-ring: 30 100% 60%;
 
     /* Motion tokens */
     --transition-fast: 80ms;
@@ -341,9 +351,49 @@ All colors MUST be HSL.
     box-shadow: 0 2px 6px rgba(16, 24, 40, 0.04);
   }
 
-  /* Sidebar styling */
+  /* Sidebar styling - Diagonal gradient with elevation */
   .sidebar-container {
     background: hsl(var(--sidebar));
+    position: relative;
+    z-index: 10;
+  }
+  
+  /* Dark mode sidebar with diagonal gradient and shadow */
+  .dark .sidebar-container {
+    /* Diagonal gradient - light source from top-left (more pronounced) */
+    background: linear-gradient(
+      135deg, 
+      #21262D 0%,   /* Brighter top-left corner */
+      #1A1F26 35%,  /* Mid-tone transition */
+      #0F1117 100%  /* Deep dark bottom-right */
+    ) !important;
+    
+    /* Visible edge definition */
+    border-right: 1px solid rgba(240, 246, 252, 0.12) !important;
+    
+    /* Combined shadows: elevation + inner glow */
+    box-shadow: 
+      6px 0 32px -6px rgba(0, 0, 0, 0.8),
+      inset 2px 2px 0 rgba(255, 255, 255, 0.08) !important;
+  }
+
+  /* Dark mode ProjectOverviewHeader with diagonal gradient */
+  .dark .project-overview-card {
+    /* Diagonal gradient - light source from top-left */
+    background: linear-gradient(
+      135deg, 
+      #21262D 0%,   /* Brighter top-left corner */
+      #1A1F26 35%,  /* Mid-tone transition */
+      #0F1117 100%  /* Deep dark bottom-right */
+    ) !important;
+    
+    /* Border with subtle visibility */
+    border-color: rgba(240, 246, 252, 0.12) !important;
+    
+    /* Elevation shadow + inner glow for lighting effect */
+    box-shadow: 
+      0 4px 24px -4px rgba(0, 0, 0, 0.7),
+      inset 2px 2px 0 rgba(255, 255, 255, 0.08) !important;
   }
 
   /* Main content styling */
@@ -374,5 +424,25 @@ All colors MUST be HSL.
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
     font-weight: 600;
     color: hsl(var(--primary));
+  }
+
+  /* Dark mode card backgrounds matching screenshot with gradient and shadow */
+  .dark .bg-secondary\/50 {
+    background: rgba(255, 255, 255, 0.05) !important; /* Subtle grey card */
+  }
+  
+  .dark .bg-success\/10 {
+    background: linear-gradient(135deg, rgba(74, 181, 158, 0.25), rgba(74, 181, 158, 0.15)) !important; /* Vibrant teal gradient */
+    box-shadow: 0 4px 12px rgba(74, 181, 158, 0.15) !important; /* Teal glow shadow */
+  }
+  
+  .dark .bg-warning\/10 {
+    background: linear-gradient(135deg, rgba(255, 153, 51, 0.22), rgba(255, 153, 51, 0.12)) !important; /* Orange gradient */
+    box-shadow: 0 4px 12px rgba(255, 153, 51, 0.12) !important; /* Orange glow shadow */
+  }
+  
+  .dark .bg-primary\/10 {
+    background: linear-gradient(135deg, rgba(119, 158, 203, 0.18), rgba(119, 158, 203, 0.10)) !important; /* Subtle gradient for progress */
+    box-shadow: 0 4px 12px rgba(119, 158, 203, 0.08) !important; /* Subtle glow */
   }
 }
